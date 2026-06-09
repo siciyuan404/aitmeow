@@ -1,0 +1,7 @@
+/target
+**/*.rs.bk
+node_modules/
+desktop/dist/
+desktop/.vite/
+*.log
+.env

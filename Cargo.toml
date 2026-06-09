@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/aitmeow-core",
+    "crates/aitmeow-cli",
+    "crates/aitmeow-server",
+]
+resolver = "2"
