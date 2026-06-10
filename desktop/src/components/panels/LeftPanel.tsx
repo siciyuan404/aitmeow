@@ -9,14 +9,6 @@ interface LeftPanelProps {
   onParamsChange: (p: Record<string, string>) => void;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  brand: 'M12 2L2 7l10 5 10-5-10-5z',
-  chart: 'M18 20V10M12 20V4M6 20v-6',
-  illustration: 'M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z',
-  icon: 'M4 4h16v16H4V4z',
-  infographic: 'M4 4h7v7H4V4zM13 4h7v7h-7V4zM4 13h7v7H4v-7zM13 13h7v7h-7v-7z',
-};
-
 export default function LeftPanel({
   selectedTemplate,
   templateParams,
@@ -58,10 +50,18 @@ export default function LeftPanel({
     onParamsChange({ ...templateParams, [key]: value });
   };
 
+  const catLabel: Record<string, string> = {
+    brand: '品牌标志',
+    chart: '数据图表',
+    illustration: '插画',
+    icon: '图标',
+    infographic: '信息图',
+  };
+
   return (
     <aside className="w-64 border-r border-slate-200 bg-white p-3 flex flex-col shrink-0 overflow-y-auto">
-      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">
-        Templates
+      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
+        模板
       </div>
 
       {categories.map((cat) => (
@@ -70,13 +70,13 @@ export default function LeftPanel({
             onClick={() => toggleCat(cat)}
             className="flex items-center justify-between w-full p-2 hover:bg-slate-50 rounded-lg text-slate-700 font-medium text-sm transition-colors"
           >
-            <span className="flex items-center gap-2 capitalize">
-              <svg className="w-[14px] h-[14px] text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <span className="flex items-center gap-2">
+              <svg className="w-[14px] h-[14px] text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m6 9 6 6 6-6"/>
               </svg>
-              {cat}
+              {catLabel[cat] || cat}
             </span>
-            <span className="text-xs bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-semibold">
+            <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-semibold">
               {byCategory.get(cat)?.length || 0}
             </span>
           </button>
@@ -92,11 +92,13 @@ export default function LeftPanel({
         </div>
       ))}
 
+      {!connected && (
+        <p className="text-slate-500 text-xs text-center py-8">连接服务端以加载模板</p>
+      )}
+
       {selectedTemplate && selectedTemplate.options.length > 0 && (
-        <div className="border-t border-slate-100 mt-2 pt-3">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">
-            Options
-          </div>
+        <div className="border-t border-slate-200 mt-2 pt-3">
+          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">选项</div>
           {selectedTemplate.options.map((opt) => (
             <OptionField
               key={opt.key}
@@ -108,12 +110,14 @@ export default function LeftPanel({
         </div>
       )}
 
+{/* TODO: create template UI */ false && (
       <div className="mt-auto pt-3">
         <button className="w-full border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/30 text-slate-500 hover:text-blue-600 transition-all rounded-xl py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5">
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-          <span>New Template</span>
+          <span>新建模板</span>
         </button>
       </div>
+)}
     </aside>
   );
 }
@@ -130,10 +134,10 @@ function TemplateCard({
   return (
     <div
       onClick={onSelect}
-      className={`ml-3 p-2.5 rounded-xl border flex items-center gap-3 cursor-pointer transition-all mb-1 ${
+      className={`ml-3 p-2.5 rounded-xl border flex items-center gap-3 cursor-pointer transition-all mb-1 relative ${
         selected
           ? 'border-blue-500 ring-1 ring-blue-500/10 bg-white shadow-md shadow-blue-500/5'
-          : 'border-slate-100 hover:border-slate-200 bg-white shadow-sm shadow-slate-50'
+          : 'border-slate-200 hover:border-slate-300 bg-white shadow-sm shadow-slate-50'
       }`}
     >
       {selected && (
@@ -141,13 +145,13 @@ function TemplateCard({
           ✓
         </div>
       )}
-      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
       </div>
-      <div className="flex flex-col min-w-0 relative flex-1">
+      <div className="flex flex-col min-w-0 flex-1">
         <span className="text-xs font-semibold text-slate-800 truncate">{template.name}</span>
         {template.description && (
-          <span className="text-[10px] text-slate-400 truncate">{template.description}</span>
+          <span className="text-[10px] text-slate-500 truncate">{template.description}</span>
         )}
       </div>
     </div>
@@ -155,50 +159,32 @@ function TemplateCard({
 }
 
 function OptionField({ option, value, onChange }: { option: TemplateOption; value: string; onChange: (v: string) => void }) {
+  const { label, type, placeholder, options, default: def, min, max, step } = option;
   return (
-    <div className="flex flex-col gap-1 px-1 mb-2">
-      <label className="text-[11px] font-medium text-slate-500">{option.label}</label>
-      {option.type === 'color' && (
+    <div className="flex flex-col gap-1 px-1 mb-2.5">
+      <label className="text-[11px] font-medium text-slate-600">{label}</label>
+      {type === 'color' && (
         <div className="flex items-center border border-slate-200 rounded-lg p-1.5 gap-2 bg-slate-50/50">
-          <span className="w-4 h-4 rounded shadow-sm shrink-0" style={{ backgroundColor: value || option.default }} />
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="bg-transparent font-mono text-slate-700 outline-none w-full text-[11px]"
-          />
+          <span className="w-4 h-4 rounded shadow-sm shrink-0" style={{ backgroundColor: value || def }} />
+          <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+            className="bg-transparent font-mono text-slate-700 outline-none w-full text-[11px]" />
         </div>
       )}
-      {option.type === 'select' && option.options && (
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px]"
-        >
-          {option.options.map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
+      {type === 'select' && options && (
+        <select value={value} onChange={(e) => onChange(e.target.value)}
+          className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px]">
+          {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       )}
-      {option.type === 'text' && (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={option.placeholder}
-          className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px]"
-        />
+      {type === 'text' && (
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || ''}
+          className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px] placeholder:text-slate-400" />
       )}
-      {option.type === 'range' && (
-        <input
-          type="range"
-          min={option.min || 0}
-          max={option.max || 100}
-          step={option.step || 1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full"
-        />
+      {type === 'range' && (
+        <div className="flex items-center gap-2">
+          <input type="range" min={min || 0} max={max || 100} step={step || 1} value={value} onChange={(e) => onChange(e.target.value)} className="flex-1" />
+          <span className="text-[10px] text-slate-500 w-8 text-right">{value}</span>
+        </div>
       )}
     </div>
   );

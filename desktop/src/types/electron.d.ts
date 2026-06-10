@@ -6,6 +6,10 @@ interface ElectronAPI {
   settingsSet: (key: string, value: unknown) => Promise<{ success: boolean }>;
   onConnectionLog: (callback: (message: string) => void) => () => void;
   onConnectionStatus: (callback: (status: { running: boolean; port: number }) => void) => () => void;
+  windowMinimize: () => Promise<void>;
+  windowMaximize: () => Promise<void>;
+  windowClose: () => Promise<void>;
+  windowIsMaximized: () => Promise<boolean>;
 }
 
 interface Window {

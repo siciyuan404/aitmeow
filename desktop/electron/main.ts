@@ -4,16 +4,15 @@ import { registerIpcHandlers } from './ipc/registry';
 
 let mainWindow: BrowserWindow | null = null;
 
-const isDev = !app.isPackaged;
-
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
-    title: 'AI Tmeow',
-    backgroundColor: '#030712',
+    width: 1400,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 700,
+    title: 'aitmeow',
+    backgroundColor: '#f3f4f6',
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -21,15 +20,13 @@ function createWindow() {
     },
   });
 
-  if (isDev) {
-    const distPath = path.join(__dirname, '../dist/index.html');
-    const fs = require('fs');
-    if (fs.existsSync(distPath)) {
-      mainWindow.loadFile(distPath);
-    } else {
-      mainWindow.loadURL('http://localhost:5173');
-    }
-    mainWindow.webContents.openDevTools();
+  const distPath = path.join(__dirname, '../dist/index.html');
+  const fs = require('fs');
+
+  if (fs.existsSync(distPath)) {
+    mainWindow.loadFile(distPath);
+  } else if (!app.isPackaged) {
+    mainWindow.loadURL('http://localhost:5173');
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }

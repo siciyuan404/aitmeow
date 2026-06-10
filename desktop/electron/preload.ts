@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsGet: (key: string) => ipcRenderer.invoke('settings:get', key),
   settingsSet: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value),
 
+  windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+  windowMaximize: () => ipcRenderer.invoke('window:maximize'),
+  windowClose: () => ipcRenderer.invoke('window:close'),
+  windowIsMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+
   onConnectionLog: (callback: (message: string) => void) => {
     const handler = (_event: IpcRendererEvent, message: string) => callback(message);
     ipcRenderer.on('connection:log', handler);
