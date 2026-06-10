@@ -5,9 +5,11 @@ class WebSocketClient {
   private url: string = '';
   private handlers: Map<string, MessageHandler[]> = new Map();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private shouldReconnect = true;
 
   connect(port: number): void {
-    this.url = `ws://localhost:${port}`;
+    this.shouldReconnect = true;
+    this.url = `ws://127.0.0.1:${port}/ws/preview`;
     this.createConnection();
   }
 
@@ -17,76 +19,54 @@ class WebSocketClient {
     }
 
     this.ws = new WebSocket(this.url);
-
-    this.ws.onopen = () => {
-      this.emit('connected', null);
-    };
-
+    this.ws.onopen = () => this.emit('connected', null);
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type) {
-          this.emit(data.type, data.payload);
-        }
-        this.emit('message', data);
+        this.emit(data.type || 'message', data);
       } catch {
         this.emit('raw', event.data);
       }
     };
-
     this.ws.onclose = () => {
       this.emit('disconnected', null);
-      this.scheduleReconnect();
+      if (this.shouldReconnect) this.scheduleReconnect();
     };
-
-    this.ws.onerror = (error) => {
-      this.emit('error', error);
-    };
+    this.ws.onerror = () => this.emit('error', null);
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-    }
-    this.reconnectTimer = setTimeout(() => {
-      this.createConnection();
-    }, 3000);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => this.createConnection(), 3000);
   }
 
   send(type: string, payload?: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type, payload }));
+      this.ws.send(JSON.stringify({ type, ...(payload as object || {}) }));
     }
   }
 
   on(event: string, handler: MessageHandler): () => void {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, []);
-    }
+    if (!this.handlers.has(event)) this.handlers.set(event, []);
     this.handlers.get(event)!.push(handler);
-
     return () => {
       const handlers = this.handlers.get(event);
       if (handlers) {
-        const index = handlers.indexOf(handler);
-        if (index !== -1) handlers.splice(index, 1);
+        const idx = handlers.indexOf(handler);
+        if (idx !== -1) handlers.splice(idx, 1);
       }
     };
   }
 
-  private emit(event: string, data: unknown): void {
-    const handlers = this.handlers.get(event);
-    if (handlers) {
-      handlers.forEach((handler) => handler(data));
-    }
-  }
-
   disconnect(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-    }
+    this.shouldReconnect = false;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.ws?.close();
     this.ws = null;
+  }
+
+  private emit(event: string, data: unknown): void {
+    this.handlers.get(event)?.forEach((h) => h(data));
   }
 }
 

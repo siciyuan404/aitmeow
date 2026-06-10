@@ -1,27 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 export default function SettingsPage() {
-  const { port, dbPath, theme, loaded, setPort, setDbPath, setTheme, loadSettings, saveSettings } = useSettingsStore();
+  const { port, dbPath, theme, loaded, setPort, setDbPath, setTheme, loadSettings, saveSettings } =
+    useSettingsStore();
   const [portInput, setPortInput] = useState(String(port));
   const [dbPathInput, setDbPathInput] = useState(dbPath);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  useEffect(() => {
-    setPortInput(String(port));
-    setDbPathInput(dbPath);
-  }, [port, dbPath]);
+  useEffect(() => { loadSettings(); }, []);
+  useEffect(() => { setPortInput(String(port)); setDbPathInput(dbPath); }, [port, dbPath]);
 
   const handleSave = async () => {
     const portNum = parseInt(portInput, 10);
-    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-      toast.error('Invalid port number');
-      return;
-    }
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) { toast.error('Invalid port number'); return; }
     setPort(portNum);
     setDbPath(dbPathInput);
     await saveSettings();
@@ -40,80 +32,78 @@ export default function SettingsPage() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-100">Settings</h1>
-        <p className="text-sm text-gray-500 mt-1">Configure your AI Tmeow server</p>
+        <p className="text-sm text-gray-500 mt-1">Configure aitmeow</p>
       </div>
 
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800 space-y-4">
-        <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Server</h2>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">Port</label>
+      <SettingsGroup title="Server">
+        <SettingsField label="Port" description="HTTP and MCP server port (requires restart)">
           <input
-            type="number"
-            value={portInput}
-            onChange={(e) => setPortInput(e.target.value)}
-            min={1}
-            max={65535}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            type="number" value={portInput}
+            onChange={(e) => setPortInput(e.target.value)} min={1} max={65535}
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">Database Path</label>
+        </SettingsField>
+        <SettingsField label="Database Path" description="SQLite database file location">
           <input
-            type="text"
-            value={dbPathInput}
+            type="text" value={dbPathInput}
             onChange={(e) => setDbPathInput(e.target.value)}
-            placeholder="/path/to/aitmeow.db"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            placeholder="~/.aitmeow/aitmeow.db"
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
-        </div>
-      </div>
+        </SettingsField>
+      </SettingsGroup>
 
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800 space-y-4">
-        <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Appearance</h2>
-
+      <SettingsGroup title="Appearance">
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">Theme</label>
+          <label className="block text-sm text-gray-400 mb-2">Theme</label>
           <div className="flex gap-3">
-            <button
-              onClick={() => setTheme('dark')}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                theme === 'dark'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Dark
-            </button>
-            <button
-              onClick={() => setTheme('light')}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                theme === 'light'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Light
-            </button>
+            {(['dark', 'light', 'system'] as const).map((t) => (
+              <button key={t} onClick={() => setTheme(t)}
+                className={`px-4 py-2 rounded-lg text-sm capitalize transition-colors ${
+                  theme === t ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}>
+                {t}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      </SettingsGroup>
 
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800 space-y-2">
-        <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">About</h2>
-        <p className="text-sm text-gray-400">AI Tmeow Desktop v0.1.0</p>
-        <p className="text-sm text-gray-500">Electron + React + TypeScript + Vite + Tailwind</p>
-      </div>
+      <SettingsGroup title="About">
+        <p className="text-sm text-gray-400">aitmeow v0.1.0</p>
+        <p className="text-xs text-gray-500 mt-1">
+          SVG tool service — MCP server for Claude Code
+        </p>
+        <p className="text-xs text-gray-600 mt-1">
+          Electron + React + TypeScript + Tailwind &middot; Rust backend (axum + sqlx + usvg + resvg)
+        </p>
+      </SettingsGroup>
 
       <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-        >
+        <button onClick={handleSave}
+          className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm">
           Save Settings
         </button>
       </div>
+    </div>
+  );
+}
+
+function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-gray-900 rounded-lg p-4 border border-gray-800 space-y-4">
+      <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wider">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function SettingsField({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm text-gray-400 mb-1">{label}</label>
+      {children}
+      {description && <p className="text-[11px] text-gray-600 mt-1">{description}</p>}
     </div>
   );
 }
