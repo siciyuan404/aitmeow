@@ -22,6 +22,7 @@ name = "aitmeow-cli"
 version = "0.1.0"
 dependencies = [
  "aitmeow-core",
+ "aitmeow-server",
  "clap",
  "serde_json",
  "tokio",

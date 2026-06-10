@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 aitmeow-core = { path = "../aitmeow-core" }
+aitmeow-server = { path = "../aitmeow-server" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
