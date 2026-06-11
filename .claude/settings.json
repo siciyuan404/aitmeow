@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aitmeow": {
+      "url": "http://127.0.0.1:8765/mcp",
+      "description": "aitmeow SVG 设计工具 — svg_preview：获取会话上下文，提交 AI 生成的 SVG 到桌面端预览"
+    }
+  }
+}

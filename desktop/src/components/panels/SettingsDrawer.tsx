@@ -56,7 +56,7 @@ export default function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         <div className="space-y-1 mt-auto">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">关于</h3>
           <p className="text-sm text-slate-700">aitmeow v0.1.0</p>
-          <p className="text-[11px] text-slate-500">SVG 工具服务 — Claude Code 的 MCP 服务端</p>
+          <p className="text-[11px] text-slate-500">SVG 工具服务 (MCP svg_preview)</p>
           <p className="text-[11px] text-slate-500">Electron + React + Rust 后端</p>
         </div>
 

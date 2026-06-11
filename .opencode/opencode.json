@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "aitmeow": {
+      "type": "remote",
+      "url": "http://localhost:8765/mcp",
+      "enabled": true,
+      "description": "aitmeow SVG 工具服务 — svg_preview：提交 AI 生成的 SVG 到桌面端预览"
+    }
+  }
+}
