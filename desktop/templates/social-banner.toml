@@ -1,0 +1,58 @@
+name = "social-banner"
+description = "社交平台横幅"
+category = "social"
+prompt_template = "为 {{platform}} 设计一个 {{style}} 风格的社交平台横幅 SVG。设计要求：- 标题：{{title}} - 副标题：{{subtitle}} - 主色调：{{primary_color}} - 尺寸：{{width}}x{{height}} - 现代简洁社交媒体横幅 - 用 SVG 原生元素 - 横幅比例 {{ratio}} - 输出完整 SVG XML"
+
+[validation]
+rules = ["max_size", "viewbox"]
+retry_on_fail = 2
+
+[[options]]
+type = "text"
+key = "title"
+label = "标题"
+default = "欢迎"
+
+[[options]]
+type = "text"
+key = "subtitle"
+label = "副标题"
+default = "了解更多"
+
+[[options]]
+type = "select"
+key = "platform"
+label = "平台"
+options = ["twitter", "linkedin", "facebook", "wechat"]
+default = "twitter"
+
+[[options]]
+type = "color"
+key = "primary_color"
+label = "主色"
+default = "#3B82F6"
+
+[[options]]
+type = "select"
+key = "style"
+label = "风格"
+options = ["modern", "minimal", "bold", "corporate"]
+default = "modern"
+
+[[options]]
+type = "text"
+key = "width"
+label = "宽度"
+default = "1200"
+
+[[options]]
+type = "text"
+key = "height"
+label = "高度"
+default = "600"
+
+[[options]]
+type = "text"
+key = "ratio"
+label = "比例"
+default = "2:1"
