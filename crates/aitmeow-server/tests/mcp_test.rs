@@ -48,11 +48,18 @@ async fn test_mcp_tools_list() {
 async fn test_mcp_svg_preview() {
     let state = build_test_state().await;
     let params = json!({
-        "svg_content": "<svg xmlns='http://www.w3.org/2000/svg'></svg>"
+        "name": "svg_preview",
+        "arguments": {
+            "svg_content": "<svg xmlns='http://www.w3.org/2000/svg'></svg>"
+        }
     });
-    let result = McpRouter::handle_request(&state, "svg_preview", &params).await;
+    let result = McpRouter::handle_request(&state, "tools/call", &params).await;
     assert!(result.is_ok());
     let val = result.unwrap();
-    assert_eq!(val["status"], "accepted");
-    assert!(val["generation_id"].is_string());
+    // Should be wrapped in MCP content envelope
+    let content = val["content"].as_array().unwrap();
+    assert_eq!(content[0]["type"], "text");
+    let inner: serde_json::Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(inner["status"], "accepted");
+    assert!(inner["generation_id"].is_string());
 }

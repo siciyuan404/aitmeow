@@ -16,7 +16,7 @@ impl McpRouter {
                 let args = params.get("arguments").cloned().unwrap_or(Value::Null);
                 Self::call_tool(state, name, &args).await
             }
-            _ => Self::dispatch(state, method, params).await,
+            _ => Err(format!("unknown method: {}", method)),
         }
     }
 
