@@ -1,152 +1,84 @@
+use crate::api::session;
 use crate::app_state::AppState;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 pub struct McpRouter;
 
 impl McpRouter {
     pub async fn handle_request(state: &AppState, method: &str, params: &Value) -> Result<Value, String> {
         match method {
-            "svg_validate" => {
-                let svg = params.get("svg").and_then(|v| v.as_str()).ok_or("missing 'svg' param")?;
-                let rules_json = params.get("rules").cloned();
-                let rules = if let Some(rj) = rules_json {
-                    crate::mcp::parse_rules(&rj, state.config.max_svg_size)
-                } else {
-                    state.rule_engine.rules.clone()
-                };
-
-                let result = aitmeow_core::svg::validate_svg(svg, &rules)
-                    .map_err(|e| e.to_string())?;
-
-                Ok(serde_json::to_value(&result).unwrap_or_default())
+            "initialize" => Ok(Self::handle_initialize()),
+            "notifications/initialized" => Ok(serde_json::Value::Null),
+            "tools/list" => Ok(Self::list_tools()),
+            "tools/call" => {
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or("missing 'name' param for tools/call")?;
+                let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+                Self::call_tool(state, name, &args).await
             }
-            "svg_render" => {
-                let svg = params.get("svg").and_then(|v| v.as_str()).ok_or("missing 'svg' param")?;
-                let width = params.get("width").and_then(|v| v.as_u64()).map(|w| w as u32);
-                let height = params.get("height").and_then(|v| v.as_u64()).map(|h| h as u32);
-                let bg = params.get("background_color").and_then(|v| v.as_str()).map(String::from);
-
-                let opts = aitmeow_core::svg::RenderOptions {
-                    width,
-                    height,
-                    background_color: bg,
-                    format: aitmeow_core::svg::OutputFormat::Png,
-                };
-
-                let png = aitmeow_core::svg::render_svg(svg, &opts)
-                    .map_err(|e| e.to_string())?;
-
-                let base64 = base64_encode(&png);
-
-                Ok(json!({
-                    "data": format!("data:image/png;base64,{}", base64),
-                    "format": "png",
-                    "size_bytes": png.len()
-                }))
-            }
-            "svg_save" => {
-                let name = params.get("name").and_then(|v| v.as_str()).ok_or("missing 'name' param")?;
-                let svg_content = params.get("svg_content").and_then(|v| v.as_str()).ok_or("missing 'svg_content' param")?;
-                let template_name = params.get("template_name").and_then(|v| v.as_str()).map(String::from);
-                let tags: Vec<String> = params.get("tags")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                    .unwrap_or_default();
-
-                let record = aitmeow_core::repository::SvgRecord::new(name.to_string(), svg_content.to_string())
-                    .with_template(template_name.unwrap_or_default())
-                    .with_tags(tags);
-
-                state.repository.save(&record).await.map_err(|e| e.to_string())?;
-
-                Ok(serde_json::to_value(&record).unwrap_or_default())
-            }
-            "svg_list" => {
-                let opts = aitmeow_core::repository::ListOptions::default();
-                let items = state.repository.list(&opts).await.map_err(|e| e.to_string())?;
-                Ok(serde_json::to_value(&items).unwrap_or_default())
-            }
-            "svg_search" => {
-                let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
-                let tags: Vec<String> = params.get("tags")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                    .unwrap_or_default();
-
-                let results = state.repository.search(query, &tags).await.map_err(|e| e.to_string())?;
-                Ok(serde_json::to_value(&results).unwrap_or_default())
-            }
-            "svg_delete" => {
-                let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing 'id' param")?;
-                let deleted = state.repository.delete(id).await.map_err(|e| e.to_string())?;
-                Ok(json!({ "deleted": deleted }))
-            }
-            "template_list" => {
-                let templates = state.template_registry.list();
-                Ok(serde_json::to_value(templates).unwrap_or_default())
-            }
-            "template_get" => {
-                let name = params.get("name").and_then(|v| v.as_str()).ok_or("missing 'name' param")?;
-                let tmpl = state.template_registry.get(name).ok_or("template not found")?;
-                Ok(serde_json::to_value(tmpl).unwrap_or_default())
-            }
-            "server_health" => {
-                Ok(json!({
-                    "status": "ok",
-                    "service": "aitmeow",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "port": state.config.port
-                }))
-            }
-            _ => Err(format!("unknown method: {}", method)),
+            _ => Self::dispatch(state, method, params).await,
         }
     }
-}
 
-fn base64_encode(data: &[u8]) -> String {
-    use std::fmt::Write;
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    async fn call_tool(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
+        let result = Self::dispatch(state, name, args).await?;
+        let text = serde_json::to_string_pretty(&result).map_err(|e| format!("serialization error: {}", e))?;
+        Ok(json!({ "content": [{ "type": "text", "text": text }] }))
+    }
 
-    let mut result = String::new();
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
-        let combined = (b0 << 16) | (b1 << 8) | b2;
-
-        write!(result, "{}", CHARS[((combined >> 18) & 0x3F) as usize] as char).unwrap();
-        write!(result, "{}", CHARS[((combined >> 12) & 0x3F) as usize] as char).unwrap();
-
-        if chunk.len() > 1 {
-            write!(result, "{}", CHARS[((combined >> 6) & 0x3F) as usize] as char).unwrap();
-        } else {
-            result.push('=');
-        }
-
-        if chunk.len() > 2 {
-            write!(result, "{}", CHARS[(combined & 0x3F) as usize] as char).unwrap();
-        } else {
-            result.push('=');
+    async fn dispatch(state: &AppState, name: &str, params: &Value) -> Result<Value, String> {
+        match name {
+            "svg_preview" => Self::handle_preview(state, params).await,
+            _ => Err(format!("unknown method: {}", name)),
         }
     }
-    result
-}
 
-pub fn parse_rules(rules_json: &Value, max_size: usize) -> Vec<aitmeow_core::rule::Rule> {
-    use aitmeow_core::rule::Rule;
+    async fn handle_preview(state: &AppState, params: &Value) -> Result<Value, String> {
+        let svg_content = params.get("svg_content").and_then(|v| v.as_str()).ok_or("missing 'svg_content' param")?;
+        let template_name = params.get("template_name").and_then(|v| v.as_str()).unwrap_or("quick-preview");
+        let params_map: HashMap<String, String> = params.get("params")
+            .and_then(|v| v.as_object())
+            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect())
+            .unwrap_or_default();
 
-    let mut rules = Vec::new();
-    if let Some(arr) = rules_json.as_array() {
-        for item in arr {
-            if let Some(name) = item.as_str() {
-                match name {
-                    "max_size" => rules.push(Rule::MaxSize(max_size)),
-                    "viewbox" => rules.push(Rule::CheckViewBox),
-                    "require_ids" => rules.push(Rule::RequireIds),
-                    _ => {}
+        let result = session::publish_generation_internal(state, template_name, &params_map, svg_content).await;
+
+        Ok(json!({
+            "generation_id": result.id,
+            "status": "accepted"
+        }))
+    }
+
+    fn handle_initialize() -> Value {
+        json!({
+            "protocolVersion": "2024-11-05",
+            "serverInfo": {
+                "name": "aitmeow",
+                "version": env!("CARGO_PKG_VERSION")
+            },
+            "capabilities": {
+                "tools": {}
+            }
+        })
+    }
+
+    fn list_tools() -> Value {
+        json!({
+            "tools": [
+                {
+                    "name": "svg_preview",
+                    "description": "Submit SVG content to the desktop for real-time preview. Call this after generating SVG. The session context includes compiled_prompt (compiled generation instruction from selected template + template_params), selected_template, template_params, and reference_svg (if user selected a reference from the repo). Workflow: (1) optionally call session_state to get compiled_prompt context, (2) generate SVG based on compiled_prompt/reference_svg, (3) call svg_preview to push result to desktop.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "svg_content": { "type": "string", "description": "Generated SVG content to preview on desktop" },
+                            "template_name": { "type": "string", "description": "Template name used for generation (default: quick-preview)" },
+                            "params": { "type": "object", "description": "Template parameters used", "additionalProperties": { "type": "string" } }
+                        },
+                        "required": ["svg_content"]
+                    }
                 }
-            }
-        }
+            ]
+        })
     }
-    rules
 }
