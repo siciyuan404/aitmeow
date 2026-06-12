@@ -1,8 +1,10 @@
+use crate::session::SessionState;
 use aitmeow_core::config::Config;
 use aitmeow_core::repository::Repository;
 use aitmeow_core::rule::RuleEngine;
 use aitmeow_core::template::TemplateRegistry;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -10,6 +12,7 @@ pub struct AppState {
     pub template_registry: Arc<TemplateRegistry>,
     pub rule_engine: Arc<RuleEngine>,
     pub config: Arc<Config>,
+    pub session: Arc<RwLock<SessionState>>,
 }
 
 impl AppState {
@@ -31,6 +34,7 @@ impl AppState {
             template_registry: Arc::new(template_registry),
             rule_engine: Arc::new(rule_engine),
             config: Arc::new(config.clone()),
+            session: Arc::new(RwLock::new(SessionState::new())),
         })
     }
 }

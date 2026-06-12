@@ -52,7 +52,9 @@ pub fn render_svg(input: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
                     ))?;
 
             if let Some(ref bg) = opts.background_color {
-                let color = parse_color(bg).unwrap_or(tiny_skia::Color::WHITE);
+                let color = parse_color(bg).ok_or_else(|| {
+                    crate::error::AitmeowError::Render(format!("Invalid background color: {}", bg))
+                })?;
                 pixmap.fill(color);
             }
 

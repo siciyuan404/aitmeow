@@ -26,6 +26,6 @@ export const useConnectionStore = create<ConnectionStore>((set) => ({
   setPort: (port) => set({ port }),
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
-  addLog: (message) => set((state) => ({ logs: [...state.logs, message] })),
+      addLog: (message) => set((state) => ({ logs: [...state.logs.slice(-100), message] })),
   clearLogs: () => set({ logs: [] }),
 }));

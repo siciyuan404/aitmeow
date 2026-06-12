@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { api, type SvgRecord } from '@/services/api';
 import { useConnectionStore } from '@/stores/connectionStore';
 
@@ -21,17 +22,26 @@ export default function RightPanel({ selectedId, onSelect }: RightPanelProps) {
       const data = await api.listSvgs({ offset: page * perPage, limit: perPage });
       setItems(data.items);
       setTotal(data.total);
-    } catch {}
+    } catch (err: any) { toast.error('加载素材列表失败: ' + (err.message || err)); }
   }, [connected, page]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   useEffect(() => {
     if (!search.trim()) { fetchItems(); return; }
-    api.searchSvgs(search).then(setItems).catch(() => {});
+    api.searchSvgs(search).then(setItems).catch((err: Error) => toast.error('搜索失败: ' + err.message));
   }, [search]);
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+  const handleUseReference = async (item: SvgRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const full = await api.getSvg(item.id);
+      await api.setReferenceSvg({ id: full.id, name: full.name, svg_content: full.svg_content });
+      toast.success('已设为参考图: ' + full.name);
+    } catch (err: any) { toast.error('设置参考图失败: ' + (err.message || err)); }
+  };
 
   return (
     <aside className="w-[340px] border-l border-slate-200 bg-white p-3 flex flex-col shrink-0">
@@ -48,9 +58,17 @@ export default function RightPanel({ selectedId, onSelect }: RightPanelProps) {
           const selected = selectedId === item.id;
           return (
             <div key={item.id} onClick={() => onSelect(selected ? null : item.id)}
-              className={`border p-2 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
+              className={`relative border p-2 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-all group ${
                 selected ? 'border-blue-500 bg-blue-50/30 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white shadow-sm shadow-slate-50'
               }`}>
+              {/* reference button on hover */}
+              <button
+                onClick={(e) => handleUseReference(item, e)}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/80 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-all opacity-0 group-hover:opacity-100"
+                title="作为参考图"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
               <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
                 <div className="w-full h-full flex items-center justify-center scale-[0.35]" dangerouslySetInnerHTML={{ __html: item.svg_content }} />
               </div>

@@ -1,0 +1,37 @@
+name = "illustration"
+description = "插画"
+category = "illustration"
+prompt_template = "生成 {{mood}} 氛围的 SVG 插画，主题：{{subject}}。设计要求：- 800x600 viewBox 0 0 800 600 - 配色：{{color_style}} 色调 - 复杂度等级：{{complexity}} - 包含背景主体装饰元素 - 用 SVG 原生元素 - 适合网页配图 - 输出完整 SVG XML"
+
+[validation]
+rules = ["max_size", "viewbox", "require_ids"]
+retry_on_fail = 3
+
+[[options]]
+type = "text"
+key = "subject"
+label = "主题"
+default = "a cat sitting on a desk"
+
+[[options]]
+type = "select"
+key = "mood"
+label = "氛围"
+options = ["calm", "playful", "energetic", "mysterious"]
+default = "calm"
+
+[[options]]
+type = "select"
+key = "color_style"
+label = "配色风格"
+options = ["warm", "cool", "monochrome", "vibrant"]
+default = "warm"
+
+[[options]]
+type = "range"
+key = "complexity"
+label = "复杂度"
+min = 1
+max = 5
+default = 3
+step = 1

@@ -113,6 +113,7 @@ enum TemplateAction {
 
 #[tokio::main]
 async fn main() -> aitmeow_core::error::Result<()> {
+    tracing_subscriber::fmt::init();
     let cli = Cli::parse();
 
     match cli.command {

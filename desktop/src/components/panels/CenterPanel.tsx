@@ -1,25 +1,97 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { api, type ValidationResponse } from '@/services/api';
+import { wsClient } from '@/services/ws';
 
 interface CenterPanelProps {
   templateParams: Record<string, string>;
   activeRules: Set<string>;
+  selectedTemplateName: string | null;
   onSaveSuccess: (id: string) => void;
 }
 
-export default function CenterPanel({ templateParams, activeRules, onSaveSuccess }: CenterPanelProps) {
+export default function CenterPanel({ templateParams, activeRules, selectedTemplateName, onSaveSuccess }: CenterPanelProps) {
   const [svgInput, setSvgInput] = useState('');
   const [previewSvg, setPreviewSvg] = useState<string | null>(null);
   const [previewPng, setPreviewPng] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'svg' | 'png'>('svg');
   const [validation, setValidation] = useState<ValidationResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ruleNames = useCallback(() => {
     const map: Record<string, string> = { max_size: 'max_size', viewbox: 'viewbox', require_ids: 'require_ids' };
     return Array.from(activeRules).map((r) => map[r] || r).filter(Boolean);
   }, [activeRules]);
+
+  // 监听来自 Claude Code 的生成结果，自动填入并渲染
+  useEffect(() => {
+    let lastGenId = '';
+
+    function applyGeneration(data: any) {
+      const svg = data?.svg_content || '';
+      if (!svg.trim()) return;
+      // 去重：已消费过的 generation 不再处理
+      if (data?.id && data.id === lastGenId) return;
+      lastGenId = data?.id || 'consumed';
+
+      setSvgInput(svg);
+      setPreviewSvg(svg);
+      api.render(svg).then(r => {
+        setPreviewPng(r.data);
+        setViewMode('png');
+      }).catch(() => {
+        setViewMode('svg');
+      });
+
+      // 非轮询触发的才弹 toast（WS 推送）
+      if (!data?._poll) {
+        toast.success('Claude Code 已生成 SVG');
+      }
+
+      // 消费后清空服务端的 pending_generation
+      api.updateSessionState({ clear_pending: true }).catch((err: Error) => console.warn('清除 pending_generation 失败:', err.message));
+    }
+
+    // 1) 实时 WS 推送
+    const unsubscribe = wsClient.on('GenerationReady', (data: any) => {
+      applyGeneration(data);
+    });
+
+    // 2) 挂载后立即拉一次（处理事件先于组件挂载到达的情况）
+    const pollPending = () => {
+      api.sessionState().then((state) => {
+        if (state.pending_generation?.svg_content) {
+          applyGeneration({ ...state.pending_generation, _poll: true });
+        }
+      }).catch((err: Error) => console.warn('拉取 generation 失败:', err.message));
+    };
+    pollPending();
+
+    // 3) WS 重连后重新拉取（处理断连期间事件丢失的情况）
+    const unsubConnected = wsClient.on('connected', pollPending);
+
+    return () => {
+      unsubscribe();
+      unsubConnected();
+    };
+  }, []);
+
+  // 自动同步 SVG 编辑内容到服务端 Session（供 MCP Agent 读取）
+  useEffect(() => {
+    if (!svgInput.trim()) return;
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(() => {
+      api.updateSessionState({
+        pending_svg: svgInput,
+        selected_template: selectedTemplateName,
+        template_params: templateParams,
+      }).catch((err: Error) => console.warn('同步 SVG 到 session 失败:', err.message));
+    }, 800);
+    return () => {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    };
+  }, [svgInput, selectedTemplateName, templateParams]);
 
   const handleValidate = async () => {
     if (!svgInput.trim()) return toast.error('请先粘贴 SVG 代码');

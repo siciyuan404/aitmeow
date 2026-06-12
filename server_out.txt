@@ -1,0 +1,4 @@
+[2m2026-06-11T16:22:24.919718Z[0m [32m INFO[0m [2maitmeow_server[0m[2m:[0m aitmeow server v0.1.0
+[2m2026-06-11T16:22:24.960233Z[0m [32m INFO[0m [2maitmeow_server[0m[2m:[0m Listening on http://127.0.0.1:8765
+[2m2026-06-11T16:22:24.978962Z[0m [32m INFO[0m [2maitmeow_server[0m[2m:[0m Health: http://127.0.0.1:8765/api/health
+[2m2026-06-11T16:22:25.038021Z[0m [32m INFO[0m [2maitmeow_server[0m[2m:[0m MCP: http://127.0.0.1:8765/mcp

@@ -1,0 +1,34 @@
+name = "brand-logo"
+description = "品牌标志"
+category = "brand"
+prompt_template = "为 {{company}} 设计一个 {{style}} 风格的品牌标志 SVG。设计要求：- 主体形状：{{shape}} - 主色调：{{primary_color}} - 512x512 viewBox 0 0 512 512 - 现代简洁品牌标识 - 用 SVG 原生元素 - 容纳品牌名 {{company}} 文字 - 输出完整 SVG XML"
+
+[validation]
+rules = ["max_size", "viewbox"]
+retry_on_fail = 2
+
+[[options]]
+type = "color"
+key = "primary_color"
+label = "主色"
+default = "#3B82F6"
+
+[[options]]
+type = "select"
+key = "shape"
+label = "形状"
+options = ["circle", "hexagon", "diamond", "square"]
+default = "circle"
+
+[[options]]
+type = "text"
+key = "company"
+label = "品牌名"
+default = "AITMEOW"
+
+[[options]]
+type = "select"
+key = "style"
+label = "风格"
+options = ["modern", "minimal", "bold", "gradient"]
+default = "modern"

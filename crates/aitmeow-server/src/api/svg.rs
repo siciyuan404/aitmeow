@@ -42,10 +42,10 @@ pub async fn validate(
     };
 
     match validate_svg(&req.svg, &rules) {
-        Ok(result) => (
-            StatusCode::OK,
-            Json(serde_json::to_value(&result).unwrap_or_default()),
-        ),
+        Ok(result) => {
+            let val = serde_json::to_value(&result).unwrap_or_default();
+            (StatusCode::OK, Json(val))
+        }
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": e.to_string()})),
@@ -66,7 +66,8 @@ pub async fn render(
 
     match render_svg(&req.svg, &opts) {
         Ok(png_data) => {
-            let base64 = base64_encode(&png_data);
+            use base64::Engine;
+            let base64 = base64::engine::general_purpose::STANDARD.encode(&png_data);
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -81,29 +82,4 @@ pub async fn render(
             Json(serde_json::json!({"error": e.to_string()})),
         ),
     }
-}
-
-fn base64_encode(data: &[u8]) -> String {
-    use std::fmt::Write;
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::new();
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
-        let combined = (b0 << 16) | (b1 << 8) | b2;
-        write!(result, "{}", CHARS[((combined >> 18) & 0x3F) as usize] as char).unwrap();
-        write!(result, "{}", CHARS[((combined >> 12) & 0x3F) as usize] as char).unwrap();
-        if chunk.len() > 1 {
-            write!(result, "{}", CHARS[((combined >> 6) & 0x3F) as usize] as char).unwrap();
-        } else {
-            result.push('=');
-        }
-        if chunk.len() > 2 {
-            write!(result, "{}", CHARS[(combined & 0x3F) as usize] as char).unwrap();
-        } else {
-            result.push('=');
-        }
-    }
-    result
 }

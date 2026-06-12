@@ -2,9 +2,11 @@ pub mod api;
 pub mod app_state;
 pub mod http;
 pub mod mcp;
+pub mod session;
 pub mod ws;
 
 use tokio::net::TcpListener;
+use tracing::info;
 
 pub async fn start_server(config: aitmeow_core::config::Config) -> aitmeow_core::error::Result<()> {
     let port = config.port;
@@ -15,10 +17,10 @@ pub async fn start_server(config: aitmeow_core::config::Config) -> aitmeow_core:
     let addr = format!("127.0.0.1:{}", port);
     let listener = TcpListener::bind(&addr).await?;
 
-    println!("aitmeow server v{}", env!("CARGO_PKG_VERSION"));
-    println!("Listening on http://{}", addr);
-    println!("Health: http://{}/api/health", addr);
-    println!("MCP: http://{}/mcp", addr);
+    info!("aitmeow server v{}", env!("CARGO_PKG_VERSION"));
+    info!("Listening on http://{}", addr);
+    info!("Health: http://{}/api/health", addr);
+    info!("MCP: http://{}/mcp", addr);
 
     axum::serve(listener, app).await?;
 

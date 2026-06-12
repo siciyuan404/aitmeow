@@ -81,6 +81,30 @@ export interface HealthResponse {
   version: string;
 }
 
+export interface ReferenceSvg {
+  id: string;
+  name: string;
+  svg_content: string;
+}
+
+export interface SessionState {
+  selected_template: string | null;
+  template_params: Record<string, string>;
+  active_rules: string[];
+  compiled_prompt: string | null;
+  template_details: Template | null;
+  reference_svg: ReferenceSvg | null;
+  pending_generation: GenerationResult | null;
+}
+
+export interface GenerationResult {
+  id: string;
+  template_name: string;
+  params: Record<string, string>;
+  svg_content: string;
+  created_at: string;
+}
+
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
 
@@ -134,4 +158,18 @@ export const api = {
   listTemplates: () => request<TemplateListResponse>('/api/template'),
 
   getTemplate: (name: string) => request<Template>(`/api/template/${encodeURIComponent(name)}`),
+
+  sessionState: () => request<SessionState>('/api/session/state'),
+
+  updateSessionState: (data: { selected_template?: string | null; template_params?: Record<string, string>; active_rules?: string[]; pending_svg?: string; clear_pending?: boolean }) =>
+    request<{ ok: true }>('/api/session/state', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  setReferenceSvg: (ref: { id: string; name: string; svg_content: string } | null) =>
+    request<{ ok: true }>('/api/session/reference', {
+      method: 'POST',
+      body: JSON.stringify({ reference_svg: ref }),
+    }),
 };

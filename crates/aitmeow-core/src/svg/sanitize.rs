@@ -3,29 +3,27 @@ use crate::error::Result;
 pub fn sanitize(input: &str) -> Result<String> {
     let mut output = input.to_string();
 
-    let dangerous_tags = ["script", "foreignObject", "use"];
-    for tag in dangerous_tags {
-        let open_start = format!("<{}", tag);
-        let open_end = format!("<{} ", tag);
-        let close = format!("</{}>", tag);
-
-        output = output.replace(&open_start, &format!("<!-- removed {} ", tag));
-        output = output.replace(&open_end, &format!("<!-- removed {} ", tag));
-        output = output.replace(&close, "-->");
+    // Use case-insensitive replacement via regex for dangerous tags
+    for tag in &["script", "foreignObject", "use", "foreignobject"] {
+        let re = regex::Regex::new(&format!(r"(?i)<(/?){}[\s>]", regex::escape(tag))).unwrap();
+        output = re.replace_all(&output, |caps: &regex::Captures| {
+            format!("<!-- removed {} ", &caps[0])
+        }).to_string();
+        let close_re = regex::Regex::new(&format!(r"(?i)</{}[\s>]", regex::escape(tag))).unwrap();
+        output = close_re.replace_all(&output, "-->").to_string();
     }
 
-    let event_attrs = [
-        "onclick", "onload", "onerror", "onmouseover", "onmouseout",
-        "onmousedown", "onmouseup", "onfocus", "onblur", "onchange",
-        "onsubmit", "onreset", "onselect", "onkeydown", "onkeyup",
-        "onkeypress", "ondblclick", "onabort", "onunload",
-    ];
-    for attr in event_attrs {
-        output = output.replace(&format!("{}=", attr), "data-removed-=");
-    }
+    // Remove event handler attributes (case-insensitive)
+    let event_re = regex::Regex::new(r"(?i)\bon\w+\s*=").unwrap();
+    output = event_re.replace_all(&output, "data-removed-=").to_string();
 
-    output = output.replace("javascript:", "blocked:");
-    output = output.replace("data:text/html", "blocked:");
+    // Remove javascript: URLs (case-insensitive)
+    let js_re = regex::Regex::new(r"(?i)javascript:").unwrap();
+    output = js_re.replace_all(&output, "blocked:").to_string();
+
+    // Remove data:text/html URLs (case-insensitive)
+    let data_re = regex::Regex::new(r"(?i)data:text/html").unwrap();
+    output = data_re.replace_all(&output, "blocked:").to_string();
 
     Ok(output)
 }

@@ -1,8 +1,13 @@
-use crate::api::{health, repo, svg, template};
+use crate::api::{health, repo, session as session_api, svg, template};
 use crate::app_state::AppState;
 use crate::mcp::McpRouter;
-use axum::{routing::get, routing::post, Json, Router};
+use axum::{
+    routing::get,
+    routing::post,
+    Json, Router,
+};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::limit::RequestBodyLimitLayer;
 
 pub fn create_router(state: AppState) -> Router {
     let cors = CorsLayer::new()
@@ -19,8 +24,11 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/template", get(template::list_templates))
         .route("/api/template/{name}", get(template::get_template))
         .route("/api/health", get(health::health))
+        .route("/api/session/state", get(session_api::get_state).post(session_api::update_state))
+        .route("/api/session/reference", post(session_api::set_reference))
         .route("/ws/preview", get(crate::ws::ws_handler))
         .route("/mcp", post(handle_mcp))
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(cors)
         .with_state(state)
 }
@@ -33,27 +41,12 @@ async fn handle_mcp(
     let params = body.get("params").cloned().unwrap_or(serde_json::Value::Null);
     let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
 
-    let (result, error) = match McpRouter::handle_request(&state, method, &params).await {
-        Ok(val) => (val, serde_json::Value::Null),
-        Err(e) => (
-            serde_json::Value::Null,
-            serde_json::json!({"code": -32601, "message": e}),
-        ),
-    };
-
-    let response = if error.is_null() {
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "result": result
-        })
-    } else {
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "error": error
-        })
-    };
-
-    Json(response)
+    match McpRouter::handle_request(&state, method, &params).await {
+        Ok(result) => Json(serde_json::json!({
+            "jsonrpc": "2.0", "id": id, "result": result
+        })),
+        Err(err) => Json(serde_json::json!({
+            "jsonrpc": "2.0", "id": id, "error": err.to_json_rpc_error()
+        })),
+    }
 }

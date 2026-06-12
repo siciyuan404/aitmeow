@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Toaster } from 'sonner';
+import { useState, useCallback, useEffect } from 'react';
+import { Toaster, toast } from 'sonner';
 import TopBar from '@/components/layout/TopBar';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import LeftPanel from '@/components/panels/LeftPanel';
@@ -7,23 +7,68 @@ import CenterPanel from '@/components/panels/CenterPanel';
 import RightPanel from '@/components/panels/RightPanel';
 import RuleBar from '@/components/panels/RuleBar';
 import SettingsDrawer from '@/components/panels/SettingsDrawer';
-import ConnectionModal from '@/components/panels/ConnectionModal';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { api } from '@/services/api';
+import { wsClient } from '@/services/ws';
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [connectionOpen, setConnectionOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
   const [selectedSvgId, setSelectedSvgId] = useState<string | null>(null);
   const [activeRules, setActiveRules] = useState<Set<string>>(
     new Set(['max_size', 'viewbox', 'require_ids']),
   );
-  const { connected, port } = useConnectionStore();
-  const { loadSettings } = useSettingsStore();
+  const { connected, port, setPort, setConnected, setConnecting, addLog } = useConnectionStore();
+  const { port: settingsPort, loadSettings } = useSettingsStore();
 
-  useState(() => { loadSettings(); });
+  useEffect(() => { loadSettings(); }, []);
+
+  // 连接成功后，将桌面端状态同步到服务端 Session
+  useEffect(() => {
+    if (!connected) return;
+    api.updateSessionState({
+      selected_template: selectedTemplate?.name || null,
+      template_params: templateParams,
+      active_rules: Array.from(activeRules),
+    }).catch((err: Error) => console.warn('同步 session 失败:', err.message));
+  }, [selectedTemplate, templateParams, activeRules, connected]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let retries = 0;
+
+    async function tryConnect() {
+      setConnecting(true);
+      const ports = [settingsPort];
+      for (const p of ports) {
+        (window as any).__AITMEOW_PORT__ = p;
+        try {
+          await api.health();
+          if (cancelled) return;
+          setPort(p);
+          setConnected(true);
+          wsClient.connect(p);
+          addLog(`已连接到端口 ${p}`);
+          return;
+        } catch {
+          // try next port
+        }
+      }
+      if (cancelled) return;
+      retries++;
+      if (retries < 10) {
+        setTimeout(tryConnect, 1500);
+      } else {
+        setConnecting(false);
+        addLog('无法连接到服务端，请检查服务是否启动');
+      }
+    }
+
+    tryConnect();
+    return () => { cancelled = true; };
+  }, []);
 
   const toggleRule = useCallback((id: string) => {
     setActiveRules((prev) => {
@@ -39,7 +84,6 @@ export default function App() {
         <TopBar
           connected={connected}
           port={port}
-          onConnectionClick={() => setConnectionOpen(true)}
           onSettingsClick={() => setSettingsOpen(true)}
         />
 
@@ -53,6 +97,7 @@ export default function App() {
           <CenterPanel
             templateParams={templateParams}
             activeRules={activeRules}
+            selectedTemplateName={selectedTemplate?.name || null}
             onSaveSuccess={(id) => setSelectedSvgId(id)}
           />
           <RightPanel
@@ -65,7 +110,6 @@ export default function App() {
       </div>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <ConnectionModal open={connectionOpen} onClose={() => setConnectionOpen(false)} />
 
       <Toaster position="bottom-right" theme="light" />
     </ErrorBoundary>

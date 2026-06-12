@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 #[tokio::main]
 async fn main() -> aitmeow_core::error::Result<()> {
+    tracing_subscriber::fmt::init();
     let mut config = aitmeow_core::config::Config::load();
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -13,12 +16,18 @@ async fn main() -> aitmeow_core::error::Result<()> {
             }
             "--db" => {
                 if let Some(p) = args.get(i + 1) {
-                    config.db_path = std::path::PathBuf::from(p);
+                    config.db_path = PathBuf::from(p);
                     i += 1;
                 }
             }
             "--memory" => {
-                config.db_path = std::path::PathBuf::from(":memory:");
+                config.db_path = PathBuf::from(":memory:");
+            }
+            "--template-dir" => {
+                if let Some(p) = args.get(i + 1) {
+                    config.template_dirs.push(PathBuf::from(p));
+                    i += 1;
+                }
             }
             _ => {}
         }
