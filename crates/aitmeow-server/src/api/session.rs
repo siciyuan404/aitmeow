@@ -30,8 +30,8 @@ pub async fn get_state(
 
     // 尝试编译 prompt
     let compiled_prompt = if let Some(ref tmpl_name) = session.selected_template {
-        state
-            .template_registry
+        let registry = state.template_registry.read().await;
+        registry
             .get(tmpl_name)
             .map(|tmpl| {
                 aitmeow_core::template::compile_prompt(tmpl, &session.template_params)

@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct AppState {
     pub repository: Arc<Repository>,
-    pub template_registry: Arc<TemplateRegistry>,
+    pub template_registry: Arc<RwLock<TemplateRegistry>>,
     pub rule_engine: Arc<RuleEngine>,
     pub config: Arc<Config>,
     pub session: Arc<RwLock<SessionState>>,
@@ -31,7 +31,7 @@ impl AppState {
 
         Ok(Self {
             repository: Arc::new(repository),
-            template_registry: Arc::new(template_registry),
+            template_registry: Arc::new(RwLock::new(template_registry)),
             rule_engine: Arc::new(rule_engine),
             config: Arc::new(config.clone()),
             session: Arc::new(RwLock::new(SessionState::new())),
