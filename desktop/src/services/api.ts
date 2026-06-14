@@ -172,4 +172,29 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ reference_svg: ref }),
     }),
+
+  createTemplate: (data: {
+    name: string;
+    description: string;
+    category: string;
+    reference?: string | null;
+    prompt_template: string;
+    options: TemplateOption[];
+    validation?: { rules: string[]; retry_on_fail: number };
+  }) =>
+    request<Template>('/api/template', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateTemplate: (name: string, data: Template) =>
+    request<Template>(`/api/template/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteTemplate: (name: string) =>
+    request<{ deleted: boolean }>(`/api/template/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    }),
 };
