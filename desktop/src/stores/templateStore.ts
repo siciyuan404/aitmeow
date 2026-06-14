@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { TemplateDefinition } from '../types/template';
+import { api } from '../services/api';
 
 interface TemplateState {
   templates: TemplateDefinition[];
@@ -16,6 +17,10 @@ interface TemplateState {
   setParams: (params: Record<string, string>) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  createTemplate: (data: Omit<TemplateDefinition, 'validation'>) => Promise<void>;
+  updateTemplate: (name: string, data: TemplateDefinition) => Promise<void>;
+  deleteTemplate: (name: string) => Promise<void>;
+  refreshTemplates: () => Promise<void>;
 }
 
 export const useTemplateStore = create<TemplateState>()(
@@ -66,5 +71,79 @@ export const useTemplateStore = create<TemplateState>()(
       set((s) => {
         s.error = error;
       }),
+
+    createTemplate: async (data) => {
+      set((s) => { s.loading = true; s.error = null; });
+      try {
+        const created = await api.createTemplate({
+          ...data,
+          validation: { rules: [], retry_on_fail: 0 },
+        });
+        set((s) => {
+          s.templates.push(created);
+          if (!s.categories.includes(created.category)) {
+            s.categories.push(created.category);
+          }
+        });
+      } catch (err: any) {
+        set((s) => { s.error = err.message || 'Failed to create template'; });
+        throw err;
+      } finally {
+        set((s) => { s.loading = false; });
+      }
+    },
+
+    updateTemplate: async (name, data) => {
+      set((s) => { s.loading = true; s.error = null; });
+      try {
+        const updated = await api.updateTemplate(name, data);
+        set((s) => {
+          const idx = s.templates.findIndex((t) => t.name === name);
+          if (idx !== -1) {
+            s.templates[idx] = updated;
+          }
+        });
+      } catch (err: any) {
+        set((s) => { s.error = err.message || 'Failed to update template'; });
+        throw err;
+      } finally {
+        set((s) => { s.loading = false; });
+      }
+    },
+
+    deleteTemplate: async (name) => {
+      set((s) => { s.loading = true; s.error = null; });
+      try {
+        await api.deleteTemplate(name);
+        set((s) => {
+          s.templates = s.templates.filter((t) => t.name !== name);
+          if (s.selectedTemplate === name) {
+            s.selectedTemplate = null;
+            s.templateParams = {};
+          }
+        });
+      } catch (err: any) {
+        set((s) => { s.error = err.message || 'Failed to delete template'; });
+        throw err;
+      } finally {
+        set((s) => { s.loading = false; });
+      }
+    },
+
+    refreshTemplates: async () => {
+      set((s) => { s.loading = true; });
+      try {
+        const res = await api.listTemplates();
+        set((s) => {
+          s.templates = res.templates;
+          s.categories = res.categories;
+          s.error = null;
+        });
+      } catch (err: any) {
+        set((s) => { s.error = err.message || 'Failed to load templates'; });
+      } finally {
+        set((s) => { s.loading = false; });
+      }
+    },
   }))
 );

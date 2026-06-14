@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { api, type Template, type TemplateOption } from '@/services/api';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useTemplateStore } from '@/stores/templateStore';
 import ColorPicker from '@/components/ColorPicker';
 import VisualSelect, { getIconForValue } from '@/components/shapes';
+import TemplateEditor from '@/components/template/TemplateEditor';
 
 interface LeftPanelProps {
   selectedTemplate: Template | null;
@@ -19,10 +21,13 @@ export default function LeftPanel({
   onParamsChange,
 }: LeftPanelProps) {
   const { connected } = useConnectionStore();
+  const { createTemplate, updateTemplate, deleteTemplate } = useTemplateStore();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['brand']));
   const [referenceSvg, setReferenceSvg] = useState<{ id: string; name: string; svg_content: string } | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
   useEffect(() => {
     if (!connected) return;
@@ -70,6 +75,52 @@ export default function LeftPanel({
     } catch (err: any) { toast.error('清除参考图失败: ' + (err.message || err)); }
   };
 
+  const handleCreateTemplate = () => {
+    setEditingTemplate(null);
+    setShowEditor(true);
+  };
+
+  const handleEditTemplate = (tmpl: Template) => {
+    setEditingTemplate(tmpl);
+    setShowEditor(true);
+  };
+
+  const handleSaveTemplate = async (tmpl: Template) => {
+    try {
+      if (editingTemplate) {
+        await updateTemplate(editingTemplate.name, tmpl);
+        toast.success('模板已更新');
+        // Refresh local templates list
+        const res = await api.listTemplates();
+        setTemplates(res.templates);
+      } else {
+        await createTemplate(tmpl);
+        toast.success('模板已创建');
+        // Refresh local templates list
+        const res = await api.listTemplates();
+        setTemplates(res.templates);
+        setCategories(res.categories);
+      }
+      setShowEditor(false);
+    } catch (err: any) {
+      toast.error(err.message || '保存失败');
+      throw err;
+    }
+  };
+
+  const handleDeleteTemplate = async (name: string) => {
+    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
+    try {
+      await deleteTemplate(name);
+      toast.success('模板已删除');
+      // Refresh local templates list
+      const res = await api.listTemplates();
+      setTemplates(res.templates);
+    } catch (err: any) {
+      toast.error(err.message || '删除失败');
+    }
+  };
+
   const catLabel: Record<string, string> = {
     brand: '品牌标志',
     chart: '数据图表',
@@ -81,10 +132,19 @@ export default function LeftPanel({
   return (
     <aside className="w-72 border-r border-slate-200 bg-white flex flex-col shrink-0">
       {/* fixed header */}
-      <div className="p-3 pb-0 shrink-0">
+      <div className="p-3 pb-0 shrink-0 flex items-center justify-between">
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
           模板
         </div>
+        <button
+          onClick={handleCreateTemplate}
+          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          创建
+        </button>
       </div>
 
       {/* scrollable template list */}
@@ -164,6 +224,15 @@ export default function LeftPanel({
             {compilePrompt(selectedTemplate, templateParams)}
           </div>
         </div>
+      )}
+
+      {/* Editor Modal */}
+      {showEditor && (
+        <TemplateEditor
+          template={editingTemplate}
+          onSave={handleSaveTemplate}
+          onCancel={() => setShowEditor(false)}
+        />
       )}
     </aside>
   );
