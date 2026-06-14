@@ -121,6 +121,9 @@ impl TemplateRegistry {
 
     /// Create a new template and persist to disk
     pub fn create(&mut self, template_dir: &Path, template: Template) -> Result<()> {
+        // Validate first
+        validate_template(&template)?;
+
         // Check for duplicate name
         if self.get(&template.name).is_some() {
             return Err(AitmeowError::Template(format!(
@@ -151,6 +154,9 @@ impl TemplateRegistry {
 
     /// Update an existing template
     pub fn update(&mut self, _template_dir: &Path, template: Template) -> Result<()> {
+        // Validate first
+        validate_template(&template)?;
+
         // Find existing template index
         let idx = self.templates.iter().position(|t| t.name == template.name)
             .ok_or_else(|| AitmeowError::Template(format!(
@@ -207,6 +213,44 @@ fn sanitize_filename(name: &str) -> String {
         })
         .collect::<String>()
         .to_lowercase()
+}
+
+/// Validate template before create/update
+pub fn validate_template(tmpl: &Template) -> Result<()> {
+    // Name validation
+    if tmpl.name.trim().is_empty() {
+        return Err(AitmeowError::Template("Template name cannot be empty".into()));
+    }
+
+    if tmpl.name.len() > 64 {
+        return Err(AitmeowError::Template("Template name too long (max 64 chars)".into()));
+    }
+
+    // Check for invalid characters in name
+    if !tmpl.name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ') {
+        return Err(AitmeowError::Template(
+            "Template name can only contain alphanumeric, dash, underscore, and space".into()
+        ));
+    }
+
+    // Prompt template validation
+    if tmpl.prompt_template.trim().is_empty() {
+        return Err(AitmeowError::Template("Prompt template cannot be empty".into()));
+    }
+
+    // Options validation - check for duplicate keys
+    let mut keys = std::collections::HashSet::new();
+    for opt in &tmpl.options {
+        let key = opt.key();
+        if !keys.insert(key) {
+            return Err(AitmeowError::Template(format!(
+                "Duplicate option key: {}",
+                key
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn compile_prompt(
@@ -304,6 +348,24 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(registry.list().len(), 0);
         assert!(!temp_dir.path().join("test.toml").exists());
+    }
+
+    #[test]
+    fn test_validate_template() {
+        let tmpl = Template {
+            name: "".into(),
+            description: "Test".into(),
+            category: "test".into(),
+            reference: None,
+            prompt_template: "{{color}}".into(),
+            options: vec![],
+            validation: Default::default(),
+            source_path: PathBuf::new(),
+        };
+
+        let result = validate_template(&tmpl);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("name cannot be empty"));
     }
 
     #[test]
