@@ -148,6 +148,54 @@ impl TemplateRegistry {
 
         Ok(())
     }
+
+    /// Update an existing template
+    pub fn update(&mut self, _template_dir: &Path, template: Template) -> Result<()> {
+        // Find existing template index
+        let idx = self.templates.iter().position(|t| t.name == template.name)
+            .ok_or_else(|| AitmeowError::Template(format!(
+                "Template '{}' not found",
+                template.name
+            )))?;
+
+        let old_path = self.templates[idx].source_path.clone();
+
+        // Serialize to TOML
+        let toml_str = toml::to_string_pretty(&template)
+            .map_err(|e| AitmeowError::Template(format!("Failed to serialize: {}", e)))?;
+
+        // Write to file
+        std::fs::write(&old_path, toml_str)
+            .map_err(|e| AitmeowError::Io(e))?;
+
+        // Update in registry
+        self.templates[idx] = template;
+        self.templates[idx].source_path = old_path;
+
+        Ok(())
+    }
+
+    /// Delete a template from registry and disk
+    pub fn delete(&mut self, name: &str) -> Result<()> {
+        let idx = self.templates.iter().position(|t| t.name == name)
+            .ok_or_else(|| AitmeowError::Template(format!(
+                "Template '{}' not found",
+                name
+            )))?;
+
+        let path = self.templates[idx].source_path.clone();
+
+        // Remove from disk
+        if path.exists() {
+            std::fs::remove_file(&path)
+                .map_err(|e| AitmeowError::Io(e))?;
+        }
+
+        // Remove from registry
+        self.templates.remove(idx);
+
+        Ok(())
+    }
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -205,6 +253,57 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(registry.list().len(), 1);
         assert!(temp_dir.path().join("test-template.toml").exists());
+    }
+
+    #[test]
+    fn test_update_template() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut registry = TemplateRegistry::new();
+
+        let tmpl = Template {
+            name: "test".into(),
+            description: "Original".into(),
+            category: "test".into(),
+            reference: None,
+            prompt_template: "Prompt".into(),
+            options: vec![],
+            validation: Default::default(),
+            source_path: temp_dir.path().join("test.toml"),
+        };
+
+        registry.create(temp_dir.path(), tmpl.clone()).unwrap();
+
+        let mut updated = tmpl.clone();
+        updated.description = "Updated".into();
+
+        let result = registry.update(temp_dir.path(), updated);
+        assert!(result.is_ok());
+        assert_eq!(registry.get("test").unwrap().description, "Updated");
+    }
+
+    #[test]
+    fn test_delete_template() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut registry = TemplateRegistry::new();
+
+        let tmpl = Template {
+            name: "test".into(),
+            description: "Test".into(),
+            category: "test".into(),
+            reference: None,
+            prompt_template: "Prompt".into(),
+            options: vec![],
+            validation: Default::default(),
+            source_path: temp_dir.path().join("test.toml"),
+        };
+
+        registry.create(temp_dir.path(), tmpl).unwrap();
+        assert_eq!(registry.list().len(), 1);
+
+        let result = registry.delete("test");
+        assert!(result.is_ok());
+        assert_eq!(registry.list().len(), 0);
+        assert!(!temp_dir.path().join("test.toml").exists());
     }
 
     #[test]
