@@ -18,3 +18,7 @@ base64 = "0.22"
 [lib]
 name = "aitmeow_server"
 path = "src/lib.rs"
+
+[dev-dependencies]
+tower = "0.5"
+tempfile = "3.8"

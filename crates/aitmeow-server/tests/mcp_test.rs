@@ -16,7 +16,7 @@ async fn build_test_state() -> AppState {
     let rule_engine = RuleEngine::default_rules();
     AppState {
         repository: Arc::new(repository),
-        template_registry: Arc::new(template_registry),
+        template_registry: Arc::new(RwLock::new(template_registry)),
         rule_engine: Arc::new(rule_engine),
         config: Arc::new(config),
         session: Arc::new(RwLock::new(SessionState::new())),
