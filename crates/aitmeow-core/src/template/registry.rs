@@ -118,6 +118,47 @@ impl TemplateRegistry {
             })
             .collect()
     }
+
+    /// Create a new template and persist to disk
+    pub fn create(&mut self, template_dir: &Path, template: Template) -> Result<()> {
+        // Check for duplicate name
+        if self.get(&template.name).is_some() {
+            return Err(AitmeowError::Template(format!(
+                "Template '{}' already exists",
+                template.name
+            )));
+        }
+
+        // Sanitize filename
+        let filename = sanitize_filename(&template.name);
+        let file_path = template_dir.join(format!("{}.toml", filename));
+
+        // Serialize to TOML
+        let toml_str = toml::to_string_pretty(&template)
+            .map_err(|e| AitmeowError::Template(format!("Failed to serialize: {}", e)))?;
+
+        // Write to file
+        std::fs::write(&file_path, toml_str)
+            .map_err(|e| AitmeowError::Io(e))?;
+
+        // Add to registry with updated source_path
+        let mut tmpl_with_path = template;
+        tmpl_with_path.source_path = file_path;
+        self.templates.push(tmpl_with_path);
+
+        Ok(())
+    }
+}
+
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => c,
+            ' ' => '-',
+            _ => '_',
+        })
+        .collect::<String>()
+        .to_lowercase()
 }
 
 pub fn compile_prompt(
@@ -143,6 +184,28 @@ pub fn compile_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_create_template() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut registry = TemplateRegistry::new();
+
+        let tmpl = Template {
+            name: "test-template".into(),
+            description: "Test template".into(),
+            category: "test".into(),
+            reference: None,
+            prompt_template: "Test prompt".into(),
+            options: vec![],
+            validation: Default::default(),
+            source_path: temp_dir.path().join("test-template.toml"),
+        };
+
+        let result = registry.create(temp_dir.path(), tmpl.clone());
+        assert!(result.is_ok());
+        assert_eq!(registry.list().len(), 1);
+        assert!(temp_dir.path().join("test-template.toml").exists());
+    }
 
     #[test]
     fn test_compile_prompt() {
