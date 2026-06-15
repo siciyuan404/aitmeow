@@ -7,10 +7,10 @@ use tower::ServiceExt;
 #[tokio::test]
 async fn test_template_crud_flow() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let mut config = Config::load_for_test()
-        .with_db_path(temp_dir.path().join("test.db"));
+    let mut config = Config::load_for_test();
 
-    // Add template directory
+    // Use in-memory database for testing
+    config.db_path = ":memory:".into();
     config.template_dirs = vec![temp_dir.path().to_path_buf()];
 
     let state = AppState::new(&config).await.unwrap();
