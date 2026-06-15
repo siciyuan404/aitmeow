@@ -47,7 +47,7 @@ impl TemplateRegistry {
         }
     }
 
-    pub fn load_from_dir(path: &Path) -> Result<Vec<Template>> {
+    pub async fn load_from_dir(path: &Path) -> Result<Vec<Template>> {
         let mut templates = Vec::new();
 
         if !path.exists() {
@@ -64,7 +64,7 @@ impl TemplateRegistry {
             )))?;
 
             let content =
-                std::fs::read_to_string(&entry).map_err(|e| AitmeowError::Template(format!(
+                tokio::fs::read_to_string(&entry).await.map_err(|e| AitmeowError::Template(format!(
                     "Failed to read {}: {}",
                     entry.display(),
                     e
@@ -120,11 +120,25 @@ impl TemplateRegistry {
     }
 
     /// Create a new template and persist to disk
-    pub fn create(&mut self, template_dir: &Path, template: Template) -> Result<()> {
-        // Validate first
+    pub async fn create(&mut self, template_dir: &Path, template: Template) -> Result<()> {
+        // 1. Validate template
         validate_template(&template)?;
 
-        // Check for duplicate name
+        // 2. Validate directory exists
+        if !template_dir.exists() {
+            return Err(AitmeowError::Template(format!(
+                "Template directory does not exist: {}",
+                template_dir.display()
+            )));
+        }
+        if !template_dir.is_dir() {
+            return Err(AitmeowError::Template(format!(
+                "Template path is not a directory: {}",
+                template_dir.display()
+            )));
+        }
+
+        // 3. Check for duplicate name
         if self.get(&template.name).is_some() {
             return Err(AitmeowError::Template(format!(
                 "Template '{}' already exists",
@@ -132,32 +146,42 @@ impl TemplateRegistry {
             )));
         }
 
-        // Sanitize filename
+        // 4. Sanitize filename
         let filename = sanitize_filename(&template.name);
         let file_path = template_dir.join(format!("{}.toml", filename));
 
-        // Serialize to TOML
+        // 5. Check if sanitized filename already exists
+        if file_path.exists() {
+            return Err(AitmeowError::Template(format!(
+                "Template filename '{}' conflicts with existing file",
+                filename
+            )));
+        }
+
+        // 6. Serialize to TOML
         let toml_str = toml::to_string_pretty(&template)
             .map_err(|e| AitmeowError::Template(format!("Failed to serialize: {}", e)))?;
 
-        // Write to file
-        std::fs::write(&file_path, toml_str)
-            .map_err(|e| AitmeowError::Io(e))?;
-
-        // Add to registry with updated source_path
+        // 7. Add to registry FIRST (for transactional behavior)
         let mut tmpl_with_path = template;
-        tmpl_with_path.source_path = file_path;
+        tmpl_with_path.source_path = file_path.clone();
         self.templates.push(tmpl_with_path);
+
+        // 8. Write to file - if this fails, rollback
+        if let Err(e) = tokio::fs::write(&file_path, toml_str).await {
+            self.templates.pop(); // Rollback
+            return Err(AitmeowError::Io(e));
+        }
 
         Ok(())
     }
 
     /// Update an existing template
-    pub fn update(&mut self, _template_dir: &Path, template: Template) -> Result<()> {
-        // Validate first
+    pub async fn update(&mut self, _template_dir: &Path, template: Template) -> Result<()> {
+        // 1. Validate template
         validate_template(&template)?;
 
-        // Find existing template index
+        // 2. Find existing template
         let idx = self.templates.iter().position(|t| t.name == template.name)
             .ok_or_else(|| AitmeowError::Template(format!(
                 "Template '{}' not found",
@@ -166,15 +190,24 @@ impl TemplateRegistry {
 
         let old_path = self.templates[idx].source_path.clone();
 
-        // Serialize to TOML
+        // 3. Validate path still exists
+        if !old_path.exists() {
+            return Err(AitmeowError::Template(format!(
+                "Template file was deleted: {}",
+                old_path.display()
+            )));
+        }
+
+        // 4. Serialize to TOML
         let toml_str = toml::to_string_pretty(&template)
             .map_err(|e| AitmeowError::Template(format!("Failed to serialize: {}", e)))?;
 
-        // Write to file
-        std::fs::write(&old_path, toml_str)
+        // 5. Write to file
+        tokio::fs::write(&old_path, toml_str)
+            .await
             .map_err(|e| AitmeowError::Io(e))?;
 
-        // Update in registry
+        // 6. Update in registry
         self.templates[idx] = template;
         self.templates[idx].source_path = old_path;
 
@@ -182,7 +215,7 @@ impl TemplateRegistry {
     }
 
     /// Delete a template from registry and disk
-    pub fn delete(&mut self, name: &str) -> Result<()> {
+    pub async fn delete(&mut self, name: &str) -> Result<()> {
         let idx = self.templates.iter().position(|t| t.name == name)
             .ok_or_else(|| AitmeowError::Template(format!(
                 "Template '{}' not found",
@@ -193,7 +226,8 @@ impl TemplateRegistry {
 
         // Remove from disk
         if path.exists() {
-            std::fs::remove_file(&path)
+            tokio::fs::remove_file(&path)
+                .await
                 .map_err(|e| AitmeowError::Io(e))?;
         }
 
@@ -277,8 +311,8 @@ pub fn compile_prompt(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_create_template() {
+    #[tokio::test]
+    async fn test_create_template() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut registry = TemplateRegistry::new();
 
@@ -293,14 +327,14 @@ mod tests {
             source_path: temp_dir.path().join("test-template.toml"),
         };
 
-        let result = registry.create(temp_dir.path(), tmpl.clone());
+        let result = registry.create(temp_dir.path(), tmpl.clone()).await;
         assert!(result.is_ok());
         assert_eq!(registry.list().len(), 1);
         assert!(temp_dir.path().join("test-template.toml").exists());
     }
 
-    #[test]
-    fn test_update_template() {
+    #[tokio::test]
+    async fn test_update_template() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut registry = TemplateRegistry::new();
 
@@ -315,18 +349,18 @@ mod tests {
             source_path: temp_dir.path().join("test.toml"),
         };
 
-        registry.create(temp_dir.path(), tmpl.clone()).unwrap();
+        registry.create(temp_dir.path(), tmpl.clone()).await.unwrap();
 
         let mut updated = tmpl.clone();
         updated.description = "Updated".into();
 
-        let result = registry.update(temp_dir.path(), updated);
+        let result = registry.update(temp_dir.path(), updated).await;
         assert!(result.is_ok());
         assert_eq!(registry.get("test").unwrap().description, "Updated");
     }
 
-    #[test]
-    fn test_delete_template() {
+    #[tokio::test]
+    async fn test_delete_template() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut registry = TemplateRegistry::new();
 
@@ -341,10 +375,10 @@ mod tests {
             source_path: temp_dir.path().join("test.toml"),
         };
 
-        registry.create(temp_dir.path(), tmpl).unwrap();
+        registry.create(temp_dir.path(), tmpl).await.unwrap();
         assert_eq!(registry.list().len(), 1);
 
-        let result = registry.delete("test");
+        let result = registry.delete("test").await;
         assert!(result.is_ok());
         assert_eq!(registry.list().len(), 0);
         assert!(!temp_dir.path().join("test.toml").exists());

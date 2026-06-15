@@ -116,6 +116,7 @@ export default function LeftPanel({
       // Refresh local templates list
       const res = await api.listTemplates();
       setTemplates(res.templates);
+      setCategories(res.categories);  // Fix: update categories too
     } catch (err: any) {
       toast.error(err.message || '删除失败');
     }

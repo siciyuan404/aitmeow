@@ -1,0 +1,62 @@
+[
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 67,
+    "summary": "Blocking std::fs::read_to_string in sync function called from async AppState::new",
+    "failure_scenario": "AppState::new (async) calls load_from_dir which does blocking I/O at line 67. This freezes tokio runtime threads during server startup, causing timeouts if template directory has many files or slow disk."
+  },
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 60,
+    "summary": "Filename collision: duplicate check uses original name but filesystem uses sanitized lowercase",
+    "failure_scenario": "Templates 'My-Template' and 'my-template' both sanitize to 'my-template.toml'. Duplicate check passes (different names), but second create silently overwrites first file, leaving registry inconsistent with disk state."
+  },
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 43,
+    "summary": "Blocking std::fs::write in create() called from async API handlers",
+    "failure_scenario": "api/template.rs:322 calls registry.create() which does blocking write at line 43. Under concurrent load, this blocks tokio threads causing request queue buildup and timeouts."
+  },
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 73,
+    "summary": "Blocking std::fs::write in update() called from async API handlers",
+    "failure_scenario": "api/template.rs:346 calls registry.update() which does blocking write at line 73. Under concurrent load, this blocks tokio threads causing request queue buildup and timeouts."
+  },
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 95,
+    "summary": "Blocking std::fs::remove_file in delete() called from async API handlers",
+    "failure_scenario": "api/template.rs:358 calls registry.delete() which does blocking file removal at line 95. Under concurrent load, this blocks tokio threads causing request queue buildup and timeouts."
+  },
+  {
+    "file": "crates/aitmeow-server/src/api/template.rs",
+    "line": 322,
+    "summary": "No transaction or rollback between file write and in-memory registry update",
+    "failure_scenario": "registry.create() writes file successfully but if subsequent in-memory push fails, file exists on disk but registry doesn't know about it. On restart, duplicate file causes load error or silent overwrite."
+  },
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 36,
+    "summary": "No check that template_dir exists or is writable before file operations",
+    "failure_scenario": "If template_dirs[0] doesn't exist or is read-only, create() fails with generic IO error 'No such file or directory' instead of helpful validation error at API boundary."
+  },
+  {
+    "file": "crates/aitmeow-core/src/template/registry.rs",
+    "line": 155,
+    "summary": "update() doesn't verify source_path still exists before overwriting",
+    "failure_scenario": "If template file was manually deleted from disk after loading, update() writes to stale path which may have been recreated by another process, corrupting unrelated file or failing silently."
+  },
+  {
+    "file": "desktop/src/components/panels/LeftPanel.tsx",
+    "line": 592,
+    "summary": "handleDeleteTemplate only refreshes templates list, not categories list",
+    "failure_scenario": "After deleting the only template in a category, setTemplates updates but setCategories is not called. Stale category remains in UI dropdown, selecting it shows empty list."
+  },
+  {
+    "file": "desktop/src/components/template/TemplateEditor.tsx",
+    "line": 813,
+    "summary": "Error from onSave rethrown after finally block sets saving=false but modal stays open",
+    "failure_scenario": "onSave throws error, catch sets error state, finally sets saving=false, then error is rethrown. Modal remains visible with disabled submit button, user must manually close."
+  }
+]

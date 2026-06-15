@@ -41,7 +41,7 @@ pub async fn create_template(
         .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "No template directory configured".into()))?;
 
     let mut registry = state.template_registry.write().await;
-    registry.create(template_dir, tmpl.clone())
+    registry.create(template_dir, tmpl.clone()).await
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to create: {}", e)))?;
 
     Ok((StatusCode::CREATED, Json(serde_json::to_value(tmpl)
@@ -65,7 +65,7 @@ pub async fn update_template(
         .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "No template directory configured".into()))?;
 
     let mut registry = state.template_registry.write().await;
-    registry.update(template_dir, tmpl.clone())
+    registry.update(template_dir, tmpl.clone()).await
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to update: {}", e)))?;
 
     Ok(Json(serde_json::to_value(tmpl)
@@ -77,7 +77,7 @@ pub async fn delete_template(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let mut registry = state.template_registry.write().await;
-    registry.delete(&name)
+    registry.delete(&name).await
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to delete: {}", e)))?;
 
     Ok(Json(serde_json::json!({ "deleted": true })))
