@@ -59,6 +59,12 @@ export interface TemplateOption {
   step?: number;
 }
 
+export interface TemplateExample {
+  svg_content: string;
+  description?: string;
+  params?: Record<string, string>;
+}
+
 export interface Template {
   name: string;
   description: string;
@@ -67,6 +73,7 @@ export interface Template {
   prompt_template: string;
   options: TemplateOption[];
   validation: { rules: string[]; retry_on_fail: number };
+  examples?: TemplateExample[];
 }
 
 export interface TemplateListResponse {
@@ -181,6 +188,7 @@ export const api = {
     prompt_template: string;
     options: TemplateOption[];
     validation?: { rules: string[]; retry_on_fail: number };
+    examples?: TemplateExample[];
   }) =>
     request<Template>('/api/template', {
       method: 'POST',
