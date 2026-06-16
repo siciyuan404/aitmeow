@@ -25,6 +25,9 @@ interface TemplateState {
   selectedIds: string[];
   lastSelectedId: string | null;
 
+  // Edit state
+  editingTemplate: TemplateDefinition | null;
+
   setTemplates: (templates: TemplateDefinition[], categories: string[]) => void;
   selectTemplate: (name: string | null) => void;
   setParam: (key: string, value: string) => void;
@@ -44,6 +47,11 @@ interface TemplateState {
   setCategoryFilter: (category: string | null) => void;
   setSortBy: (sort: SortBy) => void;
   toggleSelection: (id: string) => void;
+
+  // Edit mode methods
+  startEdit: (template?: TemplateDefinition) => void;
+  cancelEdit: () => void;
+  saveTemplate: (template: TemplateDefinition) => Promise<void>;
 }
 
 export const useTemplateStore = create<TemplateState>()(
@@ -68,6 +76,9 @@ export const useTemplateStore = create<TemplateState>()(
     // Selection state defaults
     selectedIds: [],
     lastSelectedId: null,
+
+    // Edit state defaults
+    editingTemplate: null,
 
     setTemplates: (templates, categories) =>
       set((s) => {
@@ -213,5 +224,49 @@ export const useTemplateStore = create<TemplateState>()(
       }
       s.lastSelectedId = id;
     }),
+
+    startEdit: (template?: TemplateDefinition) => set((s) => {
+      s.editingTemplate = template || null;
+      s.activeMode = 'edit';
+    }),
+
+    cancelEdit: () => set((s) => {
+      s.editingTemplate = null;
+    }),
+
+    saveTemplate: async (template: TemplateDefinition) => {
+      const currentEditingTemplate = useTemplateStore.getState().editingTemplate;
+      set((s) => { s.loading = true; s.error = null; });
+      try {
+        const isNew = !currentEditingTemplate;
+
+        if (isNew) {
+          // Create new template
+          const created = await api.createTemplate(template);
+          set((s) => {
+            s.templates.push(created);
+            if (!s.categories.includes(created.category)) {
+              s.categories.push(created.category);
+            }
+            s.editingTemplate = null;
+          });
+        } else {
+          // Update existing template
+          const updated = await api.updateTemplate(template.name, template);
+          set((s) => {
+            const idx = s.templates.findIndex((t) => t.name === template.name);
+            if (idx !== -1) {
+              s.templates[idx] = updated;
+            }
+            s.editingTemplate = null;
+          });
+        }
+      } catch (err: any) {
+        set((s) => { s.error = err.message || 'Failed to save template'; });
+        throw err;
+      } finally {
+        set((s) => { s.loading = false; });
+      }
+    },
   }))
 );
