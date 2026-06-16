@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { TemplateDefinition } from '../types/template';
+import type { TemplateDefinition, ViewMode, SortBy, PanelMode } from '../types/template';
 import { api } from '../services/api';
 
 interface TemplateState {
@@ -10,6 +10,20 @@ interface TemplateState {
   templateParams: Record<string, string>;
   loading: boolean;
   error: string | null;
+
+  // Panel state
+  panelExpanded: boolean;
+  activeMode: PanelMode;
+
+  // View state
+  viewMode: ViewMode;
+  searchQuery: string;
+  categoryFilter: string | null;
+  sortBy: SortBy;
+
+  // Selection state
+  selectedIds: string[];
+  lastSelectedId: string | null;
 
   setTemplates: (templates: TemplateDefinition[], categories: string[]) => void;
   selectTemplate: (name: string | null) => void;
@@ -21,6 +35,15 @@ interface TemplateState {
   updateTemplate: (name: string, data: TemplateDefinition) => Promise<void>;
   deleteTemplate: (name: string) => Promise<void>;
   refreshTemplates: () => Promise<void>;
+
+  // New methods
+  togglePanel: () => void;
+  setMode: (mode: PanelMode) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setSearchQuery: (query: string) => void;
+  setCategoryFilter: (category: string | null) => void;
+  setSortBy: (sort: SortBy) => void;
+  toggleSelection: (id: string) => void;
 }
 
 export const useTemplateStore = create<TemplateState>()(
@@ -31,6 +54,20 @@ export const useTemplateStore = create<TemplateState>()(
     templateParams: {},
     loading: false,
     error: null,
+
+    // Panel state defaults
+    panelExpanded: false,
+    activeMode: 'browse' as PanelMode,
+
+    // View state defaults
+    viewMode: 'grid' as ViewMode,
+    searchQuery: '',
+    categoryFilter: null,
+    sortBy: 'name-asc' as SortBy,
+
+    // Selection state defaults
+    selectedIds: [],
+    lastSelectedId: null,
 
     setTemplates: (templates, categories) =>
       set((s) => {
@@ -145,5 +182,36 @@ export const useTemplateStore = create<TemplateState>()(
         set((s) => { s.loading = false; });
       }
     },
+
+    togglePanel: () => set((s) => { s.panelExpanded = !s.panelExpanded; }),
+
+    setMode: (mode: PanelMode) => set((s) => {
+      s.activeMode = mode;
+      if (mode !== 'manage') {
+        s.selectedIds = [];
+        s.lastSelectedId = null;
+      }
+      // Reset search and filters when switching modes
+      s.searchQuery = '';
+      s.categoryFilter = null;
+    }),
+
+    setViewMode: (mode: ViewMode) => set((s) => { s.viewMode = mode; }),
+
+    setSearchQuery: (query: string) => set((s) => { s.searchQuery = query; }),
+
+    setCategoryFilter: (category: string | null) => set((s) => { s.categoryFilter = category; }),
+
+    setSortBy: (sort: SortBy) => set((s) => { s.sortBy = sort; }),
+
+    toggleSelection: (id: string) => set((s) => {
+      const idx = s.selectedIds.indexOf(id);
+      if (idx !== -1) {
+        s.selectedIds.splice(idx, 1);
+      } else {
+        s.selectedIds.push(id);
+      }
+      s.lastSelectedId = id;
+    }),
   }))
 );
