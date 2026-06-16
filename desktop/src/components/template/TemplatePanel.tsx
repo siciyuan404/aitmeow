@@ -1,6 +1,7 @@
 import { useTemplateStore } from '@/stores/templateStore';
 import BrowseMode from './modes/BrowseMode';
 import PreviewMode from './modes/PreviewMode';
+import ManageMode from './modes/ManageMode';
 
 export default function TemplatePanel() {
   const panelExpanded = useTemplateStore(s => s.panelExpanded);
@@ -70,7 +71,6 @@ export default function TemplatePanel() {
               ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
               : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50'
           }`}
-          disabled
         >
           ⚙️ 管理
         </button>
@@ -88,14 +88,7 @@ export default function TemplatePanel() {
             </div>
           </div>
         )}
-        {activeMode === 'manage' && (
-          <div className="h-full flex items-center justify-center text-slate-400">
-            <div className="text-center">
-              <div className="text-4xl mb-2">🚧</div>
-              <div className="text-sm">管理模式开发中</div>
-            </div>
-          </div>
-        )}
+        {activeMode === 'manage' && <ManageMode />}
       </div>
     </div>
   );
