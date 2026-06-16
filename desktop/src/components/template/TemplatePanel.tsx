@@ -2,6 +2,7 @@ import { useTemplateStore } from '@/stores/templateStore';
 import BrowseMode from './modes/BrowseMode';
 import PreviewMode from './modes/PreviewMode';
 import ManageMode from './modes/ManageMode';
+import EditMode from './modes/EditMode';
 
 export default function TemplatePanel() {
   const panelExpanded = useTemplateStore(s => s.panelExpanded);
@@ -60,7 +61,6 @@ export default function TemplatePanel() {
               ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
               : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50'
           }`}
-          disabled
         >
           ✏️ 编辑
         </button>
@@ -80,14 +80,7 @@ export default function TemplatePanel() {
       <div className="flex-1 overflow-hidden">
         {activeMode === 'browse' && <BrowseMode />}
         {activeMode === 'preview' && <PreviewMode />}
-        {activeMode === 'edit' && (
-          <div className="h-full flex items-center justify-center text-slate-400">
-            <div className="text-center">
-              <div className="text-4xl mb-2">🚧</div>
-              <div className="text-sm">编辑模式开发中</div>
-            </div>
-          </div>
-        )}
+        {activeMode === 'edit' && <EditMode />}
         {activeMode === 'manage' && <ManageMode />}
       </div>
     </div>
