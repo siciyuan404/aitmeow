@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { TemplateDefinition } from '@/types/template';
+import { useTemplateImportExport } from '../hooks/useTemplateImportExport';
 
 interface TemplateContextMenuProps {
   template: TemplateDefinition;
@@ -24,6 +25,17 @@ export default function TemplateContextMenu({
   onExport,
   onSetReference,
 }: TemplateContextMenuProps) {
+  const { exportToJSON } = useTemplateImportExport();
+
+  // Handle export with built-in functionality
+  const handleExport = () => {
+    if (onExport) {
+      onExport();
+    } else {
+      exportToJSON(template);
+    }
+  };
+
   // 点击外部关闭
   useEffect(() => {
     const handleClick = () => onClose();
@@ -54,7 +66,7 @@ export default function TemplateContextMenu({
     { icon: '📋', label: '复制模板', onClick: onCopy },
     { icon: '🗑️', label: '删除模板', onClick: onDelete, danger: true },
     { divider: true },
-    { icon: '📤', label: '导出 JSON', onClick: onExport },
+    { icon: '📤', label: '导出 JSON', onClick: handleExport },
     { icon: '📌', label: '设为参考', onClick: onSetReference },
   ];
 
