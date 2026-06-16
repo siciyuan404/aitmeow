@@ -7,8 +7,10 @@ import CenterPanel from '@/components/panels/CenterPanel';
 import RightPanel from '@/components/panels/RightPanel';
 import RuleBar from '@/components/panels/RuleBar';
 import SettingsDrawer from '@/components/panels/SettingsDrawer';
+import TemplatePanel from '@/components/template/TemplatePanel';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useTemplateStore } from '@/stores/templateStore';
 import { api } from '@/services/api';
 import { wsClient } from '@/services/ws';
 
@@ -22,6 +24,7 @@ export default function App() {
   );
   const { connected, port, setPort, setConnected, setConnecting, addLog } = useConnectionStore();
   const { port: settingsPort, loadSettings } = useSettingsStore();
+  const { togglePanel, setMode } = useTemplateStore();
 
   useEffect(() => { loadSettings(); }, []);
 
@@ -78,6 +81,11 @@ export default function App() {
     });
   }, []);
 
+  const handleOpenTemplatePanel = useCallback(() => {
+    togglePanel();
+    setMode('preview');
+  }, [togglePanel, setMode]);
+
   return (
     <ErrorBoundary>
       <div className="flex flex-col h-screen bg-gray-100 text-slate-700 antialiased selection:bg-blue-100">
@@ -85,6 +93,7 @@ export default function App() {
           connected={connected}
           port={port}
           onSettingsClick={() => setSettingsOpen(true)}
+          onTemplateClick={handleOpenTemplatePanel}
         />
 
         <main className="flex-1 flex overflow-hidden min-h-0">
@@ -110,6 +119,7 @@ export default function App() {
       </div>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <TemplatePanel />
 
       <Toaster position="bottom-right" theme="light" />
     </ErrorBoundary>

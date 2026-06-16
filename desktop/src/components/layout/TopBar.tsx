@@ -4,13 +4,14 @@ interface TopBarProps {
   connected: boolean;
   port: number;
   onSettingsClick: () => void;
+  onTemplateClick?: () => void;
 }
 
 function winMin() { window.electronAPI?.windowMinimize(); }
 function winMax() { window.electronAPI?.windowMaximize(); }
 function winClose() { window.electronAPI?.windowClose(); }
 
-export default function TopBar({ connected, port, onSettingsClick }: TopBarProps) {
+export default function TopBar({ connected, port, onSettingsClick, onTemplateClick }: TopBarProps) {
   return (
     <header
       className="h-11 border-b border-slate-200 bg-white px-4 flex items-center justify-between select-none shrink-0"
@@ -30,6 +31,17 @@ export default function TopBar({ connected, port, onSettingsClick }: TopBarProps
           <StatusIndicator status={connected ? 'connected' : 'disconnected'} size="sm" />
           <span>{connected ? `端口 ${port}` : '连接中...'}</span>
         </div>
+        {onTemplateClick && (
+          <button
+            onClick={onTemplateClick}
+            className="text-slate-500 hover:text-slate-700 transition-colors p-0.5"
+            title="模板预览"
+          >
+            <svg className="w-[15px] h-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+          </button>
+        )}
         <button onClick={onSettingsClick} className="text-slate-500 hover:text-slate-700 transition-colors p-0.5">
           <svg className="w-[15px] h-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" />
