@@ -11,6 +11,12 @@ export interface TemplateOption {
   step?: number;
 }
 
+export interface TemplateExample {
+  svg_content: string;
+  description?: string;
+  params?: Record<string, string>;
+}
+
 export interface TemplateDefinition {
   name: string;
   description: string;
@@ -19,6 +25,7 @@ export interface TemplateDefinition {
   prompt_template: string;
   options: TemplateOption[];
   validation: { rules: string[]; retry_on_fail: number };
+  examples?: TemplateExample[];
 }
 
 export interface TemplateListResponse {
