@@ -38,3 +38,22 @@ export interface TemplateCardAction {
   onClick: (template: TemplateDefinition) => void;
   variant?: 'default' | 'danger';
 }
+
+// Import/Export types
+export interface ImportResult {
+  valid: boolean;
+  template?: TemplateDefinition;
+  conflict?: boolean;
+  suggestedName?: string;
+  error?: string;
+  originalName?: string;
+}
+
+export interface ExportManifest {
+  version: string;
+  exported_at: string;
+  count: number;
+  templates: string[];
+}
+
+export type ConflictStrategy = 'rename' | 'overwrite' | 'skip';
