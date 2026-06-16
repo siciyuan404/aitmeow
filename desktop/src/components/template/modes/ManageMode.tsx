@@ -3,12 +3,13 @@ import { useTemplateStore } from '@/stores/templateStore';
 import { useTemplateSelection } from '../hooks/useTemplateSelection';
 import { useTemplateBatch } from '../hooks/useTemplateBatch';
 import { useTemplateImportExport } from '../hooks/useTemplateImportExport';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import TemplateSearch from '../components/TemplateSearch';
 import CategorySidebar from '../components/CategorySidebar';
 import TemplateGrid from '../components/TemplateGrid';
 import TemplateList from '../components/TemplateList';
-import TemplateBatchToolbar from '../components/TemplateBatchToolbar';
-import ImportDialog from '../components/ImportDialog';
+import { TemplateBatchToolbar } from '../components/TemplateBatchToolbar';
+import { ImportDialog } from '../components/ImportDialog';
 import type { TemplateDefinition, ImportResult, ConflictStrategy } from '@/types/template';
 import { toast } from 'sonner';
 
@@ -85,6 +86,14 @@ export default function ManageMode() {
     selectAll(filteredTemplates.map(t => t.name));
   };
 
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts({
+    enabled: true,
+    onDelete: () => setShowDeleteConfirm(true),
+    onSelectAll: handleSelectAll,
+    allTemplateIds: filteredTemplates.map(t => t.name),
+  });
+
   const handleDelete = async () => {
     setShowDeleteConfirm(false);
     await deleteMultiple(selectedTemplates);
@@ -153,6 +162,7 @@ export default function ManageMode() {
       {/* Batch toolbar */}
       <TemplateBatchToolbar
         totalCount={filteredTemplates.length}
+        allTemplateIds={filteredTemplates.map(t => t.name)}
         onDelete={() => setShowDeleteConfirm(true)}
         onExport={handleExport}
         onChangeCategory={() => setShowCategoryDialog(true)}

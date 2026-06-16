@@ -2,6 +2,7 @@ import { useTemplateSelection } from '../hooks/useTemplateSelection';
 
 interface TemplateBatchToolbarProps {
   totalCount: number;
+  allTemplateIds?: string[];
   onDelete: () => void;
   onExport: () => void;
   onChangeCategory: () => void;
@@ -11,6 +12,7 @@ interface TemplateBatchToolbarProps {
 
 export function TemplateBatchToolbar({
   totalCount,
+  allTemplateIds = [],
   onDelete,
   onExport,
   onChangeCategory,
@@ -21,8 +23,7 @@ export function TemplateBatchToolbar({
   const hasSelection = selectedCount > 0;
 
   const handleSelectAll = () => {
-    // This will be called with all template IDs from the parent
-    selectAll([]);
+    selectAll(allTemplateIds);
   };
 
   const handleInvertSelection = () => {
