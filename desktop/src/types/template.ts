@@ -26,3 +26,15 @@ export interface TemplateListResponse {
   categories: string[];
   total: number;
 }
+
+// Template UI types for panel modes and views
+export type ViewMode = 'grid' | 'list';
+export type SortBy = 'name-asc' | 'name-desc' | 'created' | 'updated' | 'category';
+export type PanelMode = 'browse' | 'edit' | 'manage' | 'preview';
+
+export interface TemplateCardAction {
+  icon: string;
+  label: string;
+  onClick: (template: TemplateDefinition) => void;
+  variant?: 'default' | 'danger';
+}

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { Template, TemplateOption } from '@/types/template';
+import type { TemplateDefinition, TemplateOption } from '@/types/template';
 
 interface TemplateEditorProps {
-  template?: Template | null;
-  onSave: (tmpl: Template) => Promise<void>;
+  template?: TemplateDefinition | null;
+  onSave: (tmpl: TemplateDefinition) => Promise<void>;
   onCancel: () => void;
 }
 
