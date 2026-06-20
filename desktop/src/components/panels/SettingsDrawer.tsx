@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/stores/settingsStore';
+import SystemUpdateSettings from './SystemUpdateSettings';
 
 interface SettingsDrawerProps {
   open: boolean;
@@ -52,6 +53,11 @@ export default function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         </div>
 
 {/* TODO: theme switching - re-enable when dark mode is implemented */}
+
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">系统-更新功能</h3>
+          <SystemUpdateSettings />
+        </div>
 
         <div className="space-y-1 mt-auto">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">关于</h3>

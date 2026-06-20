@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsGet: (key: string) => ipcRenderer.invoke('settings:get', key),
   settingsSet: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value),
 
+  updateGetStatus: () => ipcRenderer.invoke('update:getStatus'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateOpenRelease: (releaseUrl?: string) => ipcRenderer.invoke('update:openRelease', releaseUrl),
+  updateOpenDownload: (assetUrl?: string) => ipcRenderer.invoke('update:openDownload', assetUrl),
+
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowClose: () => ipcRenderer.invoke('window:close'),

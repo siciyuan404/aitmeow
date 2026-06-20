@@ -1,10 +1,12 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { registerConnectionHandlers } from './handlers/connection';
 import { registerSettingsHandlers } from './handlers/settings';
+import { registerUpdateHandlers } from './handlers/update';
 
 export function registerIpcHandlers() {
   registerConnectionHandlers();
   registerSettingsHandlers();
+  registerUpdateHandlers();
 
   ipcMain.handle('window:minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize();
