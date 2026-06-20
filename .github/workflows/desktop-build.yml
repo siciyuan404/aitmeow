@@ -76,15 +76,31 @@ jobs:
           $appDir = "release/AitMeow-win32-x64"
           $required = @(
             "$appDir/AitMeow.exe",
-            "$appDir/resources/aitmeow-server.exe",
-            "$appDir/resources/app/dist/index.html",
-            "$appDir/resources/app/dist-electron/main.js"
+            "$appDir/resources/aitmeow-server.exe"
           )
 
           foreach ($path in $required) {
             if (!(Test-Path -LiteralPath $path)) {
               throw "Missing packaged file: $path"
             }
+          }
+
+          $asarPath = "$appDir/resources/app.asar"
+          $unpackedAppFiles = @(
+            "$appDir/resources/app/dist/index.html",
+            "$appDir/resources/app/dist-electron/main.js"
+          )
+
+          $hasUnpackedApp = $true
+          foreach ($path in $unpackedAppFiles) {
+            if (!(Test-Path -LiteralPath $path)) {
+              $hasUnpackedApp = $false
+              break
+            }
+          }
+
+          if (!(Test-Path -LiteralPath $asarPath) -and !$hasUnpackedApp) {
+            throw "Missing packaged Electron app: expected app.asar or resources/app"
           }
 
       - name: Archive desktop package
