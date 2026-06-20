@@ -59,6 +59,12 @@ export interface TemplateOption {
   step?: number;
 }
 
+export interface TemplateExample {
+  svg_content: string;
+  description?: string;
+  params?: Record<string, string>;
+}
+
 export interface Template {
   name: string;
   description: string;
@@ -67,6 +73,7 @@ export interface Template {
   prompt_template: string;
   options: TemplateOption[];
   validation: { rules: string[]; retry_on_fail: number };
+  examples?: TemplateExample[];
 }
 
 export interface TemplateListResponse {
@@ -171,5 +178,31 @@ export const api = {
     request<{ ok: true }>('/api/session/reference', {
       method: 'POST',
       body: JSON.stringify({ reference_svg: ref }),
+    }),
+
+  createTemplate: (data: {
+    name: string;
+    description: string;
+    category: string;
+    reference?: string | null;
+    prompt_template: string;
+    options: TemplateOption[];
+    validation?: { rules: string[]; retry_on_fail: number };
+    examples?: TemplateExample[];
+  }) =>
+    request<Template>('/api/template', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateTemplate: (name: string, data: Template) =>
+    request<Template>(`/api/template/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteTemplate: (name: string) =>
+    request<{ deleted: boolean }>(`/api/template/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
     }),
 };

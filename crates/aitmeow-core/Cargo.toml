@@ -23,3 +23,6 @@ once_cell = "1"
 [lib]
 name = "aitmeow_core"
 path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = "3.8"

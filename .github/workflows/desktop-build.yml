@@ -1,0 +1,120 @@
+name: Desktop Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-desktop:
+    name: Windows desktop package
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Build bundled server
+        run: cargo build -p aitmeow-server --release
+
+      - name: Verify server binary
+        run: |
+          if (!(Test-Path -LiteralPath "target/release/aitmeow-server.exe")) {
+            throw "target/release/aitmeow-server.exe was not built"
+          }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build desktop renderer
+        working-directory: desktop
+        run: npm run build
+
+      - name: Build Electron main process
+        working-directory: desktop
+        run: npm run build:electron
+
+      - name: Package Windows desktop app
+        working-directory: desktop
+        run: |
+          npx -y @electron/packager@latest . AitMeow `
+            --platform=win32 `
+            --arch=x64 `
+            --out=../release `
+            --overwrite `
+            --icon=resources/icon.ico `
+            --extra-resource=../target/release/aitmeow-server.exe `
+            --extra-resource=resources/icon.ico `
+            --extra-resource=resources/icon.png
+
+      - name: Verify desktop package
+        run: |
+          $appDir = "release/AitMeow-win32-x64"
+          $required = @(
+            "$appDir/AitMeow.exe",
+            "$appDir/resources/aitmeow-server.exe"
+          )
+
+          foreach ($path in $required) {
+            if (!(Test-Path -LiteralPath $path)) {
+              throw "Missing packaged file: $path"
+            }
+          }
+
+          $asarPath = "$appDir/resources/app.asar"
+          $unpackedAppFiles = @(
+            "$appDir/resources/app/dist/index.html",
+            "$appDir/resources/app/dist-electron/main.js"
+          )
+
+          $hasUnpackedApp = $true
+          foreach ($path in $unpackedAppFiles) {
+            if (!(Test-Path -LiteralPath $path)) {
+              $hasUnpackedApp = $false
+              break
+            }
+          }
+
+          if (!(Test-Path -LiteralPath $asarPath) -and !$hasUnpackedApp) {
+            throw "Missing packaged Electron app: expected app.asar or resources/app"
+          }
+
+      - name: Archive desktop package
+        run: |
+          $zipPath = "release/AitMeow-win32-x64.zip"
+          if (Test-Path -LiteralPath $zipPath) {
+            Remove-Item -LiteralPath $zipPath -Force
+          }
+          Compress-Archive -LiteralPath "release/AitMeow-win32-x64" -DestinationPath $zipPath
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AitMeow-win32-x64
+          path: release/AitMeow-win32-x64.zip
+          if-no-files-found: error
+          retention-days: 14

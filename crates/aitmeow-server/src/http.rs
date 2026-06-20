@@ -21,8 +21,11 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/svg", get(repo::list_svgs).post(repo::save_svg))
         .route("/api/svg/{id}", get(repo::get_svg).delete(repo::delete_svg))
         .route("/api/svg/search", get(repo::search_svgs))
-        .route("/api/template", get(template::list_templates))
-        .route("/api/template/{name}", get(template::get_template))
+        .route("/api/template", get(template::list_templates).post(template::create_template))
+        .route("/api/template/{name}",
+            get(template::get_template)
+            .put(template::update_template)
+            .delete(template::delete_template))
         .route("/api/health", get(health::health))
         .route("/api/session/state", get(session_api::get_state).post(session_api::update_state))
         .route("/api/session/reference", post(session_api::set_reference))
