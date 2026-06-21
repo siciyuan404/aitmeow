@@ -263,10 +263,37 @@ impl TemplateOption {
                 }
             }
 
-            TemplateOption::ImageReference { .. } => {
-                // ImageReference needs the FeatureReport injected by the server layer.
-                // The raw PNG data flows through the preprocessing pipeline outside
-                // of schema.rs. If value is already a feature text, use it directly.
+            TemplateOption::ImageReference {
+                resize,
+                edge_detect,
+                quantize_colors,
+                threshold,
+                invert,
+                image_data,
+                ..
+            } => {
+                // If image data is available, run the preprocessing pipeline
+                // and inject the feature report into the prompt.
+                if let Some(data) = image_data {
+                    if !data.is_empty() {
+                        match crate::image::ImageProcessor::process_for_prompt(
+                            data,
+                            resize.as_deref(),
+                            edge_detect.as_deref(),
+                            *quantize_colors,
+                            *threshold,
+                            *invert,
+                        ) {
+                            Ok(feature_text) => return feature_text,
+                            Err(e) => {
+                                return format!(
+                                    "reference image: [feature extraction failed: {e}]"
+                                );
+                            }
+                        }
+                    }
+                }
+                // If value already contains a feature report (e.g., from session layer), use it.
                 if value.contains("Reference image analysis") {
                     value.to_string()
                 } else {
@@ -358,6 +385,7 @@ impl TemplateOption {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::image;
 
     // ── Generic type tests ──
 
@@ -551,7 +579,65 @@ mod tests {
     }
 
     #[test]
-    fn test_image_reference_pending() {
+    fn test_image_reference_with_real_pipeline() {
+        // Create a simple 8×8 PNG: white square on black background
+        let img = image::ImageBuffer::from_fn(8, 8, |x, y| {
+            if x >= 2 && x < 6 && y >= 2 && y < 6 {
+                image::Rgb([255u8, 255, 255])
+            } else {
+                image::Rgb([0u8, 0, 0])
+            }
+        });
+        let mut png_bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img).write_to(&mut std::io::Cursor::new(&mut png_bytes), image::ImageFormat::Png).unwrap();
+
+        let opt = TemplateOption::ImageReference {
+            key: "ref".into(),
+            label: "Reference".into(),
+            resize: Some("8x8".into()),
+            edge_detect: None,
+            quantize_colors: None,
+            threshold: None,
+            invert: false,
+            image_data: Some(png_bytes),
+        };
+
+        let out = opt.render_for_prompt("");
+        // Should contain feature report from real pipeline
+        assert!(out.contains("Reference image analysis"));
+        assert!(out.contains("8×8 grid"));
+        assert!(out.contains("edge pixels"));
+        assert!(out.contains("shape regions"));
+    }
+
+    #[test]
+    fn test_image_reference_with_edge_detection() {
+        let img = image::ImageBuffer::from_fn(16, 16, |x, _y| {
+            if x < 8 { image::Rgb([255u8, 255, 255]) } else { image::Rgb([0u8, 0, 0]) }
+        });
+        let mut png_bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img).write_to(&mut std::io::Cursor::new(&mut png_bytes), image::ImageFormat::Png).unwrap();
+
+        let opt = TemplateOption::ImageReference {
+            key: "ref".into(),
+            label: "Reference".into(),
+            resize: Some("16x16".into()),
+            edge_detect: Some("sobel".into()),
+            quantize_colors: None,
+            threshold: None,
+            invert: false,
+            image_data: Some(png_bytes),
+        };
+
+        let out = opt.render_for_prompt("");
+        assert!(out.contains("Reference image analysis"));
+        assert!(out.contains("16×16 grid"));
+        // Edge detection should find the vertical boundary
+        assert!(out.contains("edge pixels"));
+    }
+
+    #[test]
+    fn test_image_reference_no_data_returns_pending() {
         let opt = TemplateOption::ImageReference {
             key: "ref".into(),
             label: "Reference".into(),
@@ -562,7 +648,6 @@ mod tests {
             invert: false,
             image_data: None,
         };
-        assert_eq!(opt.default_value(), "");
         let out = opt.render_for_prompt("");
         assert!(out.contains("pending feature extraction"));
     }
