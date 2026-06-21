@@ -120,6 +120,11 @@ impl TemplateRegistry {
     }
 }
 
+/// Compile a template prompt by substituting `{{key}}` placeholders with values.
+///
+/// Uses type-aware rendering via [`TemplateOption::render_for_prompt`] for
+/// pixel art types that inject SVG rendering hints into the prompt.
+/// Falls back to plain value substitution for options without a matching type.
 pub fn compile_prompt(
     tmpl: &Template,
     params: &HashMap<String, String>,
@@ -127,8 +132,14 @@ pub fn compile_prompt(
     let mut prompt = tmpl.prompt_template.clone();
 
     for (key, value) in params {
+        // Use type-aware rendering if the option exists in the template
+        let rendered = if let Some(option) = tmpl.options.iter().find(|o| o.key() == key) {
+            option.render_for_prompt(value)
+        } else {
+            value.clone()
+        };
         let placeholder = format!("{{{{{}}}}}", key);
-        prompt = prompt.replace(&placeholder, value);
+        prompt = prompt.replace(&placeholder, &rendered);
     }
 
     if prompt.contains("{{") {
@@ -143,9 +154,10 @@ pub fn compile_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::template::TemplateOption;
 
     #[test]
-    fn test_compile_prompt() {
+    fn test_compile_prompt_plain() {
         let tmpl = Template {
             name: "test".into(),
             description: "".into(),
@@ -180,5 +192,95 @@ mod tests {
 
         let params = HashMap::new();
         assert!(compile_prompt(&tmpl, &params).is_err());
+    }
+
+    #[test]
+    fn test_compile_type_aware_pixel_grid() {
+        let tmpl = Template {
+            name: "pixel-test".into(),
+            description: "".into(),
+            category: "pixel".into(),
+            reference: None,
+            prompt_template: "Canvas: {{grid}}".into(),
+            options: vec![
+                TemplateOption::PixelGrid {
+                    key: "grid".into(),
+                    label: "Grid".into(),
+                    presets: vec![],
+                    allow_custom: true,
+                    default: "32x32".into(),
+                },
+            ],
+            validation: Default::default(),
+            source_path: PathBuf::new(),
+        };
+
+        let mut params = HashMap::new();
+        params.insert("grid".into(), "32x32".into());
+
+        let result = compile_prompt(&tmpl, &params).unwrap();
+        // Should contain rich pixel-grid hints from render_for_prompt
+        assert!(result.contains("32×32"));
+        assert!(result.contains("crispEdges"));
+        assert!(result.contains("viewBox"));
+    }
+
+    #[test]
+    fn test_compile_type_aware_palette() {
+        let tmpl = Template {
+            name: "pal-test".into(),
+            description: "".into(),
+            category: "pixel".into(),
+            reference: None,
+            prompt_template: "Palette: {{pal}}".into(),
+            options: vec![
+                TemplateOption::PixelPalette {
+                    key: "pal".into(),
+                    label: "Palette".into(),
+                    preset: "gameboy".into(),
+                    colors: vec![],
+                    default: "gameboy".into(),
+                },
+            ],
+            validation: Default::default(),
+            source_path: PathBuf::new(),
+        };
+
+        let mut params = HashMap::new();
+        params.insert("pal".into(), "gameboy".into());
+
+        let result = compile_prompt(&tmpl, &params).unwrap();
+        // Should contain Gameboy palette hints from render_for_prompt
+        assert!(result.contains("4 colors"));
+        assert!(result.contains("#0f380f"));
+        assert!(result.contains("gameboy"));
+    }
+
+    #[test]
+    fn test_compile_type_aware_random_seed() {
+        let tmpl = Template {
+            name: "rand-test".into(),
+            description: "".into(),
+            category: "pixel".into(),
+            reference: None,
+            prompt_template: "Random: {{seed}}".into(),
+            options: vec![
+                TemplateOption::RandomSeed {
+                    key: "seed".into(),
+                    label: "Seed".into(),
+                    seed: Some(42),
+                    strength: 0.5,
+                },
+            ],
+            validation: Default::default(),
+            source_path: PathBuf::new(),
+        };
+
+        let mut params = HashMap::new();
+        params.insert("seed".into(), "42".into());
+
+        let result = compile_prompt(&tmpl, &params).unwrap();
+        assert!(result.contains("seed=42"));
+        assert!(result.contains("reproducible"));
     }
 }
