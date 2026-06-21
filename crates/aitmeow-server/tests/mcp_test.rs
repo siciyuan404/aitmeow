@@ -40,8 +40,9 @@ async fn test_mcp_tools_list() {
     assert!(result.is_ok());
     let val = result.unwrap();
     let tools = val["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 1);
+    assert_eq!(tools.len(), 2);
     assert_eq!(tools[0]["name"], "svg_preview");
+    assert_eq!(tools[1]["name"], "session_state");
 }
 
 #[tokio::test]
@@ -62,4 +63,23 @@ async fn test_mcp_svg_preview() {
     let inner: serde_json::Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(inner["status"], "accepted");
     assert!(inner["generation_id"].is_string());
+}
+
+#[tokio::test]
+async fn test_mcp_session_state() {
+    let state = build_test_state().await;
+    let params = json!({
+        "name": "session_state",
+        "arguments": {}
+    });
+    let result = McpRouter::handle_request(&state, "tools/call", &params).await;
+    assert!(result.is_ok());
+    let val = result.unwrap();
+    // Should be wrapped in MCP content envelope
+    let content = val["content"].as_array().unwrap();
+    assert_eq!(content[0]["type"], "text");
+    let inner: serde_json::Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
+    assert!(inner["has_reference_image"].is_boolean());
+    assert!(inner["active_rules"].is_array());
+    assert!(inner["compiled_prompt"].is_null() || inner["compiled_prompt"].is_string());
 }

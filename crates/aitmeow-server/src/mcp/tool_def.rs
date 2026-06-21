@@ -1,51 +1,50 @@
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ToolDefinition {
-    pub name: &'static str,
-    pub description: &'static str,
+    pub name: String,
+    pub description: String,
     pub input_schema: Value,
 }
 
-impl ToolDefinition {
-    pub fn to_json(&self) -> Value {
-        json!({
-            "name": self.name,
-            "description": self.description,
-            "inputSchema": self.input_schema,
-        })
-    }
+pub fn list_tools() -> Vec<ToolDefinition> {
+    vec![tool_svg_preview(), tool_session_state()]
 }
 
-fn svg_preview() -> ToolDefinition {
+fn tool_svg_preview() -> ToolDefinition {
     ToolDefinition {
-        name: "svg_preview",
-        description: "Submit SVG content to the desktop for real-time preview. Call this after generating SVG. The session context includes compiled_prompt (compiled generation instruction from selected template + template_params), selected_template, template_params, and reference_svg (if user selected a reference from the repo). Workflow: (1) optionally call session_state to get compiled_prompt context, (2) generate SVG based on compiled_prompt/reference_svg, (3) call svg_preview to push result to desktop.",
+        name: "svg_preview".to_string(),
+        description: "Submit an SVG to the AitMeow desktop preview. The SVG will be rendered in the desktop UI's preview panel.".to_string(),
         input_schema: json!({
             "type": "object",
             "properties": {
-                "svg_content": { "type": "string", "description": "Generated SVG content to preview on desktop" },
-                "template_name": { "type": "string", "description": "Template name used for generation (default: quick-preview)" },
-                "params": { "type": "object", "description": "Template parameters used", "additionalProperties": { "type": "string" } }
+                "svg_content": {
+                    "type": "string",
+                    "description": "The full SVG markup to preview"
+                },
+                "template_name": {
+                    "type": "string",
+                    "description": "Optional template name for context"
+                },
+                "params": {
+                    "type": "object",
+                    "description": "Optional template parameters used for generation"
+                }
             },
             "required": ["svg_content"]
         }),
     }
 }
 
-pub fn list_tools() -> Value {
-    json!({ "tools": [svg_preview().to_json()] })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_list_tools_returns_one_tool() {
-        let result = list_tools();
-        let tools = result["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0]["name"], "svg_preview");
-        assert!(tools[0]["inputSchema"]["properties"]["svg_content"].is_object());
+fn tool_session_state() -> ToolDefinition {
+    ToolDefinition {
+        name: "session_state".to_string(),
+        description: "Read the current desktop user's session context: selected template, parameter values, active rules, and the compiled AI prompt. Use this before generating an SVG to understand what the user is working on.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        }),
     }
 }

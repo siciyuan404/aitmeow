@@ -14,7 +14,7 @@ impl McpRouter {
         match method {
             "initialize" => Ok(Self::handle_initialize()),
             "notifications/initialized" => Ok(Value::Null),
-            "tools/list" => Ok(tool_def::list_tools()),
+            "tools/list" => Ok(json!({ "tools": tool_def::list_tools() })),
             "tools/call" => {
                 let name = params.get("name").and_then(|v| v.as_str())
                     .ok_or_else(|| McpError::InvalidParams("missing 'name' param for tools/call".into()))?;
@@ -35,6 +35,7 @@ impl McpRouter {
     async fn dispatch(state: &AppState, name: &str, params: &Value) -> McpResult<Value> {
         match name {
             "svg_preview" => Self::handle_preview(state, params).await,
+            "session_state" => Self::handle_session_state(state, params).await,
             _ => Err(McpError::MethodNotFound(format!("unknown method: {}", name))),
         }
     }
@@ -53,6 +54,32 @@ impl McpRouter {
         Ok(json!({
             "generation_id": result.id,
             "status": "accepted"
+        }))
+    }
+
+    async fn handle_session_state(state: &AppState, _params: &Value) -> McpResult<Value> {
+        let session = state.session.read().await;
+        let registry = state.template_registry.read().await;
+
+        let compiled_prompt = if let Some(ref tmpl_name) = session.selected_template {
+            registry.get(tmpl_name).map(|tmpl| {
+                let mut tmpl_clone = tmpl.clone();
+                if let Some(ref img_data) = session.reference_image {
+                    tmpl_clone.inject_reference_image(img_data.clone());
+                }
+                aitmeow_core::template::compile_prompt(&tmpl_clone, &session.template_params)
+                    .unwrap_or_else(|_| tmpl.prompt_template.clone())
+            })
+        } else {
+            None
+        };
+
+        Ok(json!({
+            "selected_template": session.selected_template,
+            "template_params": session.template_params,
+            "active_rules": session.active_rules,
+            "compiled_prompt": compiled_prompt,
+            "has_reference_image": session.reference_image.is_some(),
         }))
     }
 

@@ -22,7 +22,7 @@ impl AppState {
 
         for dir in &config.template_dirs {
             if dir.exists() {
-                let templates = TemplateRegistry::load_from_dir(dir).await?;
+                let templates = TemplateRegistry::load_from_dir(dir)?;
                 template_registry.register(templates);
             }
         }

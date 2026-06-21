@@ -1,37 +1,42 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 
-/// 参考 SVG —— 用户从仓库中选择作为生成参考的图
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ReferenceSvg {
+/// Claude Code 提交的生成结果
+#[derive(Debug, Clone, Serialize)]
+pub struct GenerationResult {
+    /// 唯一标识符
     pub id: String,
-    pub name: String,
+    /// 使用的模板名
+    pub template_name: String,
+    /// 使用的参数
+    pub params: HashMap<String, String>,
+    /// SVG 内容
     pub svg_content: String,
+    /// 创建时间
+    pub created_at: String,
 }
 
-/// 会话事件 —— 通过 broadcast channel 分发给 WebSocket 客户端
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
+/// 用户选择的参考 SVG（Agent 可看到此结构来生成新 SVG）
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct ReferenceSvg {
+    /// SVG 仓库中的 ID
+    pub id: String,
+    /// SVG 内容的摘要（或部分内容）
+    pub summary: String,
+}
+
+/// WebSocket 推送的事件类型
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionEvent {
-    /// Claude Code 提交了生成的 SVG
-    GenerationReady(GenerationResult),
-    /// 桌面端更新了模板/参数选择
-    #[serde(rename = "StateUpdated")]
+    /// 用户更新了模板选择或参数
     StateUpdated {
         template: Option<String>,
         params: HashMap<String, String>,
     },
-}
-
-/// Claude Code 生成的 SVG 结果
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GenerationResult {
-    pub id: String,
-    pub template_name: String,
-    pub params: HashMap<String, String>,
-    pub svg_content: String,
-    pub created_at: String,
+    /// Claude Code 提交了新的 SVG 生成结果
+    GenerationReady(GenerationResult),
 }
 
 /// 服务端会话状态 —— 桌面端和 Claude Code 通过它共享上下文
@@ -48,6 +53,8 @@ pub struct SessionState {
     pub pending_generation: Option<GenerationResult>,
     /// 用户从仓库中选择的参考 SVG（Agent 可参考该图生成）
     pub reference_svg: Option<ReferenceSvg>,
+    /// 用户上传的参考图片（PNG 原始字节），用于像素模板的 ImageReference 参数
+    pub reference_image: Option<Vec<u8>>,
     /// 广播通道 —— WS 连接通过订阅此通道接收实时推送
     pub tx: broadcast::Sender<SessionEvent>,
 }
@@ -58,10 +65,11 @@ impl SessionState {
         Self {
             selected_template: None,
             template_params: HashMap::new(),
-            active_rules: vec!["max_size".into(), "viewbox".into(), "require_ids".into()],
-            reference_svg: None,
+            active_rules: Vec::new(),
             pending_svg: None,
             pending_generation: None,
+            reference_svg: None,
+            reference_image: None,
             tx,
         }
     }

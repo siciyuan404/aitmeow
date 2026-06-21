@@ -27,6 +27,20 @@ fn default_category() -> String {
     "general".to_string()
 }
 
+impl Template {
+    /// Inject reference image data into all [`TemplateOption::ImageReference`] options.
+    ///
+    /// Call this before [`compile_prompt`] if the user has uploaded a reference image.
+    /// The image data will be processed by the pipeline during option rendering.
+    pub fn inject_reference_image(&mut self, image_data: Vec<u8>) {
+        for option in &mut self.options {
+            if let TemplateOption::ImageReference { image_data: ref mut img, .. } = option {
+                *img = Some(image_data.clone());
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TemplateValidation {
     #[serde(default)]
@@ -47,7 +61,7 @@ impl TemplateRegistry {
         }
     }
 
-    pub async fn load_from_dir(path: &Path) -> Result<Vec<Template>> {
+    pub fn load_from_dir(path: &Path) -> Result<Vec<Template>> {
         let mut templates = Vec::new();
 
         if !path.exists() {
@@ -64,7 +78,7 @@ impl TemplateRegistry {
             )))?;
 
             let content =
-                tokio::fs::read_to_string(&entry).await.map_err(|e| AitmeowError::Template(format!(
+                std::fs::read_to_string(&entry).map_err(|e| AitmeowError::Template(format!(
                     "Failed to read {}: {}",
                     entry.display(),
                     e
@@ -121,10 +135,8 @@ impl TemplateRegistry {
 
     /// Create a new template and persist to disk
     pub async fn create(&mut self, template_dir: &Path, template: Template) -> Result<()> {
-        // 1. Validate template
         validate_template(&template)?;
 
-        // 2. Validate directory exists
         if !template_dir.exists() {
             return Err(AitmeowError::Template(format!(
                 "Template directory does not exist: {}",
@@ -138,7 +150,6 @@ impl TemplateRegistry {
             )));
         }
 
-        // 3. Check for duplicate name
         if self.get(&template.name).is_some() {
             return Err(AitmeowError::Template(format!(
                 "Template '{}' already exists",
@@ -146,11 +157,9 @@ impl TemplateRegistry {
             )));
         }
 
-        // 4. Sanitize filename
         let filename = sanitize_filename(&template.name);
         let file_path = template_dir.join(format!("{}.toml", filename));
 
-        // 5. Check if sanitized filename already exists
         if file_path.exists() {
             return Err(AitmeowError::Template(format!(
                 "Template filename '{}' conflicts with existing file",
@@ -158,30 +167,24 @@ impl TemplateRegistry {
             )));
         }
 
-        // 6. Serialize to TOML
         let toml_str = toml::to_string_pretty(&template)
             .map_err(|e| AitmeowError::Template(format!("Failed to serialize: {}", e)))?;
 
-        // 7. Add to registry FIRST (for transactional behavior)
         let mut tmpl_with_path = template;
         tmpl_with_path.source_path = file_path.clone();
         self.templates.push(tmpl_with_path);
 
-        // 8. Write to file - if this fails, rollback
         if let Err(e) = tokio::fs::write(&file_path, toml_str).await {
-            self.templates.pop(); // Rollback
+            self.templates.pop();
             return Err(AitmeowError::Io(e));
         }
 
         Ok(())
     }
 
-    /// Update an existing template
     pub async fn update(&mut self, _template_dir: &Path, template: Template) -> Result<()> {
-        // 1. Validate template
         validate_template(&template)?;
 
-        // 2. Find existing template
         let idx = self.templates.iter().position(|t| t.name == template.name)
             .ok_or_else(|| AitmeowError::Template(format!(
                 "Template '{}' not found",
@@ -190,7 +193,6 @@ impl TemplateRegistry {
 
         let old_path = self.templates[idx].source_path.clone();
 
-        // 3. Validate path still exists
         if !old_path.exists() {
             return Err(AitmeowError::Template(format!(
                 "Template file was deleted: {}",
@@ -198,23 +200,19 @@ impl TemplateRegistry {
             )));
         }
 
-        // 4. Serialize to TOML
         let toml_str = toml::to_string_pretty(&template)
             .map_err(|e| AitmeowError::Template(format!("Failed to serialize: {}", e)))?;
 
-        // 5. Write to file
         tokio::fs::write(&old_path, toml_str)
             .await
             .map_err(|e| AitmeowError::Io(e))?;
 
-        // 6. Update in registry
         self.templates[idx] = template;
         self.templates[idx].source_path = old_path;
 
         Ok(())
     }
 
-    /// Delete a template from registry and disk
     pub async fn delete(&mut self, name: &str) -> Result<()> {
         let idx = self.templates.iter().position(|t| t.name == name)
             .ok_or_else(|| AitmeowError::Template(format!(
@@ -224,14 +222,12 @@ impl TemplateRegistry {
 
         let path = self.templates[idx].source_path.clone();
 
-        // Remove from disk
         if path.exists() {
             tokio::fs::remove_file(&path)
                 .await
                 .map_err(|e| AitmeowError::Io(e))?;
         }
 
-        // Remove from registry
         self.templates.remove(idx);
 
         Ok(())
@@ -249,30 +245,22 @@ fn sanitize_filename(name: &str) -> String {
         .to_lowercase()
 }
 
-/// Validate template before create/update
 pub fn validate_template(tmpl: &Template) -> Result<()> {
-    // Name validation
     if tmpl.name.trim().is_empty() {
         return Err(AitmeowError::Template("Template name cannot be empty".into()));
     }
-
     if tmpl.name.len() > 64 {
         return Err(AitmeowError::Template("Template name too long (max 64 chars)".into()));
     }
-
-    // Check for invalid characters in name
     if !tmpl.name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ') {
         return Err(AitmeowError::Template(
             "Template name can only contain alphanumeric, dash, underscore, and space".into()
         ));
     }
-
-    // Prompt template validation
     if tmpl.prompt_template.trim().is_empty() {
         return Err(AitmeowError::Template("Prompt template cannot be empty".into()));
     }
 
-    // Options validation - check for duplicate keys
     let mut keys = std::collections::HashSet::new();
     for opt in &tmpl.options {
         let key = opt.key();
@@ -299,7 +287,6 @@ pub fn compile_prompt(
     let mut prompt = tmpl.prompt_template.clone();
 
     for (key, value) in params {
-        // Use type-aware rendering if the option exists in the template
         let rendered = if let Some(option) = tmpl.options.iter().find(|o| o.key() == key) {
             option.render_for_prompt(value)
         } else {
@@ -322,6 +309,44 @@ pub fn compile_prompt(
 mod tests {
     use super::*;
     use crate::template::TemplateOption;
+
+    #[test]
+    fn test_inject_reference_image() {
+        let mut tmpl = Template {
+            name: "ref-test".into(),
+            description: "".into(),
+            category: "test".into(),
+            reference: None,
+            prompt_template: "Ref: {{img}}".into(),
+            options: vec![
+                TemplateOption::ImageReference {
+                    key: "img".into(),
+                    label: "Image".into(),
+                    resize: Some("32x32".into()),
+                    edge_detect: None,
+                    quantize_colors: None,
+                    threshold: None,
+                    invert: false,
+                    image_data: None,
+                },
+            ],
+            validation: Default::default(),
+            source_path: PathBuf::new(),
+        };
+
+        assert!(tmpl.options[0].default_value().is_empty());
+
+        let fake_png = vec![0x89, b'P', b'N', b'G', 0, 0, 0, 0];
+        tmpl.inject_reference_image(fake_png);
+
+        // After injection, the ImageReference should have image_data
+        match &tmpl.options[0] {
+            TemplateOption::ImageReference { image_data, .. } => {
+                assert!(image_data.is_some());
+            }
+            _ => panic!("Expected ImageReference"),
+        }
+    }
 
     #[tokio::test]
     async fn test_create_template() {
@@ -477,7 +502,6 @@ mod tests {
         params.insert("grid".into(), "32x32".into());
 
         let result = compile_prompt(&tmpl, &params).unwrap();
-        // Should contain rich pixel-grid hints from render_for_prompt
         assert!(result.contains("32×32"));
         assert!(result.contains("crispEdges"));
         assert!(result.contains("viewBox"));
@@ -508,7 +532,6 @@ mod tests {
         params.insert("pal".into(), "gameboy".into());
 
         let result = compile_prompt(&tmpl, &params).unwrap();
-        // Should contain Gameboy palette hints from render_for_prompt
         assert!(result.contains("4 colors"));
         assert!(result.contains("#0f380f"));
         assert!(result.contains("gameboy"));

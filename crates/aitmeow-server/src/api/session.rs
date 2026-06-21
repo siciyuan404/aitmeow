@@ -23,23 +23,47 @@ pub struct UpdateStateRequest {
     pub clear_pending: bool,
 }
 
+/// 参考图片上传请求（PNG 原始字节 base64 编码）
+#[derive(Debug, Deserialize)]
+pub struct ReferenceImageRequest {
+    /// base64 编码的 PNG 图片数据
+    pub image_base64: String,
+    /// 预处理配置（可选）
+    #[serde(default)]
+    pub resize: Option<String>,
+    #[serde(default)]
+    pub edge_detect: Option<String>,
+    #[serde(default)]
+    pub quantize_colors: Option<usize>,
+    #[serde(default)]
+    pub threshold: Option<u8>,
+    #[serde(default)]
+    pub invert: bool,
+}
+
 pub async fn get_state(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let session = state.session.read().await;
 
-    // 尝试编译 prompt
+    // 尝试编译 prompt（注入参考图片后编译）
     let compiled_prompt = if let Some(ref tmpl_name) = session.selected_template {
         let registry = state.template_registry.read().await;
         registry
             .get(tmpl_name)
             .map(|tmpl| {
-                aitmeow_core::template::compile_prompt(tmpl, &session.template_params)
+                let mut tmpl_clone = tmpl.clone();
+                if let Some(ref img_data) = session.reference_image {
+                    tmpl_clone.inject_reference_image(img_data.clone());
+                }
+                aitmeow_core::template::compile_prompt(&tmpl_clone, &session.template_params)
                     .unwrap_or_else(|_| tmpl.prompt_template.clone())
             })
     } else {
         None
     };
+
+    let has_reference_image = session.reference_image.is_some();
 
     let resp = serde_json::json!({
         "selected_template": session.selected_template,
@@ -49,6 +73,7 @@ pub async fn get_state(
         "reference_svg": session.reference_svg,
         "pending_svg": session.pending_svg,
         "pending_generation": session.pending_generation,
+        "has_reference_image": has_reference_image,
     });
 
     Ok(Json(resp))
@@ -97,6 +122,39 @@ pub async fn set_reference(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let mut session = state.session.write().await;
     session.reference_svg = req.reference_svg;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+/// 上传参考图片 —— 桌面端将 PNG base64 存入 session
+pub async fn set_reference_image(
+    State(state): State<AppState>,
+    Json(req): Json<ReferenceImageRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // 解码 base64
+    use base64::{Engine as _, engine::general_purpose};
+    let image_data = match general_purpose::STANDARD.decode(&req.image_base64) {
+        Ok(data) => data,
+        Err(e) => {
+            return Ok(Json(serde_json::json!({
+                "ok": false,
+                "error": format!("Base64 decode failed: {e}")
+            })));
+        }
+    };
+
+    // 验证 PNG 签名
+    if image_data.len() < 8 || &image_data[..4] != b"\x89PNG" {
+        return Ok(Json(serde_json::json!({
+            "ok": false,
+            "error": "Not a valid PNG file"
+        })));
+    }
+
+    let mut session = state.session.write().await;
+    session.reference_image = Some(image_data);
+
+    // 如果有预处理配置，可以在这里提前运行管线，生成 feature text 存入 session
+
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
