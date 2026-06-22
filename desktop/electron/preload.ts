@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowClose: () => ipcRenderer.invoke('window:close'),
   windowIsMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  windowOpenSettings: () => ipcRenderer.invoke('window:openSettings'),
 
   onConnectionLog: (callback: (message: string) => void) => {
     const handler = (_event: IpcRendererEvent, message: string) => callback(message);
@@ -28,5 +29,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: IpcRendererEvent, status: { running: boolean; port: number }) => callback(status);
     ipcRenderer.on('connection:status-changed', handler);
     return () => ipcRenderer.removeListener('connection:status-changed', handler);
+  },
+
+  onSettingsReload: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('settings:reload', handler);
+    return () => ipcRenderer.removeListener('settings:reload', handler);
   },
 });

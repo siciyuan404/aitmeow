@@ -32,10 +32,12 @@ interface ElectronAPI {
   updateOpenDownload: (assetUrl?: string) => Promise<{ success: boolean; url: string }>;
   onConnectionLog: (callback: (message: string) => void) => () => void;
   onConnectionStatus: (callback: (status: { running: boolean; port: number }) => void) => () => void;
+  onSettingsReload: (callback: () => void) => () => void;
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowClose: () => Promise<void>;
   windowIsMaximized: () => Promise<boolean>;
+  windowOpenSettings: () => Promise<void>;
 }
 
 interface Window {
