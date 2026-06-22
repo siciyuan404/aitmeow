@@ -71,7 +71,7 @@ function startServer() {
   }, 3000);
 }
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -87,13 +87,26 @@ function createWindow() {
     },
   });
 
-  const distPath = path.join(__dirname, '../dist/index.html');
-  const fs = require('fs');
-
-  if (fs.existsSync(distPath)) {
-    mainWindow.loadFile(distPath);
-  } else {
-    mainWindow.loadURL('http://localhost:5173');
+  // 开发模式：优先连接 Vite dev server，不可用时才加载 dist 产物
+  const devServerUrl = 'http://localhost:5173';
+  let loadedFromDev = false;
+  try {
+    await fetch(devServerUrl);
+    await mainWindow.loadURL(devServerUrl);
+    loadedFromDev = true;
+    console.log('[main] loaded from dev server:', devServerUrl);
+  } catch {
+    console.log('[main] dev server not available');
+  }
+  if (!loadedFromDev) {
+    const distPath = path.join(__dirname, '../dist/index.html');
+    const fs = require('fs');
+    if (fs.existsSync(distPath)) {
+      mainWindow.loadFile(distPath);
+      console.log('[main] loaded from dist:', distPath);
+    } else {
+      console.error('[main] no build found, cannot load window');
+    }
   }
 
   mainWindow.on('closed', () => {
