@@ -48,7 +48,7 @@ export interface RenderResponse {
 }
 
 export interface TemplateOption {
-  type: 'color' | 'select' | 'text' | 'range';
+  type: 'color' | 'select' | 'text' | 'range' | 'boolean' | 'number' | 'textarea' | 'multiselect';
   key: string;
   label: string;
   default: string;
@@ -57,6 +57,7 @@ export interface TemplateOption {
   min?: number;
   max?: number;
   step?: number;
+  rows?: number;
 }
 
 export interface TemplateExample {

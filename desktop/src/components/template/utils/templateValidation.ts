@@ -173,10 +173,10 @@ export function validateOptions(options: TemplateOption[]): ValidationError[] {
     }
 
     // Type-specific validation
-    if (opt.type === 'select' && (!opt.options || opt.options.length === 0)) {
+    if ((opt.type === 'select' || opt.type === 'multiselect') && (!opt.options || opt.options.length === 0)) {
       errors.push({
         field: `options[${index}].options`,
-        message: `参数 ${index + 1}: 下拉选择必须定义选项列表`,
+        message: `参数 ${index + 1}: ${opt.type === 'multiselect' ? '多选' : '下拉选择'}必须定义选项列表`,
       });
     }
 

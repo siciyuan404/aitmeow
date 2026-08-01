@@ -1,14 +1,17 @@
-﻿// Template type definitions shared across desktop frontend
+// Template type definitions shared across desktop frontend
 export interface TemplateOption {
-  type: 'color' | 'select' | 'text' | 'range';
+  type: 'color' | 'select' | 'text' | 'range' | 'boolean' | 'number' | 'textarea' | 'multiselect';
   key: string;
   label: string;
   default: string;
-  options?: string[];   // for select type
-  placeholder?: string; // for text type
-  min?: number;         // for range type
-  max?: number;
-  step?: number;
+  options?: string[];        // for select / multiselect type
+  placeholder?: string;      // for text / textarea / number type
+  min?: number;              // for range / number type
+  max?: number;              // for range / number type
+  step?: number;             // for range / number type
+  rows?: number;             // for textarea type
+  // boolean: default is stored as string "true"/"false" for uniformity
+  // multiselect: default is stored as comma-separated string
 }
 
 export interface TemplateExample {

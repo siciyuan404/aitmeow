@@ -77,9 +77,9 @@ mod tests {
 
     #[test]
     fn test_invalid_svg() {
+        // 非法 XML / 非 svg 根：sanitize 直接拒绝，validate_svg 传播 Err
         let svg = "<not-svg>";
-        let result = validate_svg(svg, &[]).unwrap();
-        assert!(!result.valid);
-        assert!(!result.errors.is_empty());
+        let result = validate_svg(svg, &[]);
+        assert!(result.is_err());
     }
 }

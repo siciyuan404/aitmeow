@@ -43,6 +43,11 @@ async fn test_mcp_tools_list() {
     assert_eq!(tools.len(), 2);
     assert_eq!(tools[0]["name"], "svg_preview");
     assert_eq!(tools[1]["name"], "session_state");
+    // MCP 协议规范要求 Tool 对象的 schema 字段名是 inputSchema（camelCase），
+    // snake_case 会导致官方 SDK 客户端反序列化失败 → tools/list failed
+    assert!(tools[0]["inputSchema"].is_object(), "inputSchema must be camelCase");
+    assert!(tools[1]["inputSchema"].is_object(), "inputSchema must be camelCase");
+    assert!(tools[0].get("input_schema").is_none(), "snake_case must not be present");
 }
 
 #[tokio::test]

@@ -1,9 +1,18 @@
 import { create } from 'zustand';
 
+export type AppTheme = 'dark' | 'light' | 'system';
+
+export interface SettingsSnapshot {
+  port: number;
+  dbPath: string;
+  theme: AppTheme;
+  uiLocatorEnabled: boolean;
+}
+
 interface SettingsState {
   port: number;
   dbPath: string;
-  theme: 'dark' | 'light' | 'system';
+  theme: AppTheme;
   uiLocatorEnabled: boolean;
   loaded: boolean;
 }
@@ -11,66 +20,118 @@ interface SettingsState {
 interface SettingsActions {
   setPort: (port: number) => void;
   setDbPath: (path: string) => void;
-  setTheme: (theme: 'dark' | 'light' | 'system') => void;
+  setTheme: (theme: AppTheme) => void;
   setUiLocatorEnabled: (enabled: boolean) => Promise<void>;
   loadSettings: () => Promise<void>;
-  saveSettings: () => Promise<void>;
+  saveSettings: (settings?: Partial<SettingsSnapshot>) => Promise<void>;
 }
 
 type SettingsStore = SettingsState & SettingsActions;
 
-export const useSettingsStore = create<SettingsStore>((set, get) => ({
+const defaultSettings: SettingsSnapshot = {
   port: 8765,
   dbPath: '',
-  theme: 'dark',
+  theme: 'light',
   uiLocatorEnabled: false,
+};
+
+function normalizePort(value: unknown): number {
+  const port = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return defaultSettings.port;
+  }
+  return port;
+}
+
+function normalizeTheme(value: unknown): AppTheme {
+  return value === 'dark' || value === 'light' || value === 'system'
+    ? value
+    : defaultSettings.theme;
+}
+
+function normalizeBoolean(value: unknown): boolean {
+  return typeof value === 'boolean' ? value : false;
+}
+
+function applyTheme(theme: AppTheme) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  const isDark = theme === 'dark' || (theme === 'system' && prefersDark);
+
+  document.documentElement.classList.toggle('dark', isDark);
+  document.documentElement.classList.toggle('light', !isDark);
+}
+
+export const useSettingsStore = create<SettingsStore>((set, get) => ({
+  ...defaultSettings,
   loaded: false,
 
   setPort: (port) => set({ port }),
   setDbPath: (dbPath) => set({ dbPath }),
   setTheme: (theme) => {
     set({ theme });
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = theme === 'dark' || (theme === 'system' && prefersDark);
-    document.documentElement.classList.toggle('dark', isDark);
-    document.documentElement.classList.toggle('light', !isDark);
+    applyTheme(theme);
   },
+  setUiLocatorEnabled: async (uiLocatorEnabled) => {
+    const previous = get().uiLocatorEnabled;
+    set({ uiLocatorEnabled });
 
-  setUiLocatorEnabled: async (enabled) => {
-    set({ uiLocatorEnabled: enabled });
-    if (window.electronAPI) {
-      try {
-        await window.electronAPI.settingsSet('uiLocatorEnabled', enabled);
-      } catch {
-        set({ uiLocatorEnabled: !enabled });
-        throw new Error('保存 UI 定位设置失败');
+    try {
+      if (window.electronAPI) {
+        await window.electronAPI.settingsSet('uiLocatorEnabled', uiLocatorEnabled);
       }
+    } catch (err) {
+      set({ uiLocatorEnabled: previous });
+      throw err;
     }
   },
 
   loadSettings: async () => {
     if (window.electronAPI) {
-      const port = (await window.electronAPI.settingsGet('port')) as number;
-      const dbPath = (await window.electronAPI.settingsGet('dbPath')) as string;
-      const theme = (await window.electronAPI.settingsGet('theme')) as 'dark' | 'light' | 'system';
-      const uiLocatorEnabled = (await window.electronAPI.settingsGet('uiLocatorEnabled')) as boolean;
-      const resolvedTheme = (theme || 'dark') as 'dark' | 'light' | 'system';
-      set({ port: port || 8765, dbPath: dbPath || '', theme: resolvedTheme, uiLocatorEnabled: !!uiLocatorEnabled, loaded: true });
-      // 启动时应用主题 CSS 类
-      get().setTheme(resolvedTheme);
+      const [port, dbPath, theme, uiLocatorEnabled] = await Promise.all([
+        window.electronAPI.settingsGet('port'),
+        window.electronAPI.settingsGet('dbPath'),
+        window.electronAPI.settingsGet('theme'),
+        window.electronAPI.settingsGet('uiLocatorEnabled'),
+      ]);
+      const next = {
+        port: normalizePort(port),
+        dbPath: typeof dbPath === 'string' ? dbPath : defaultSettings.dbPath,
+        theme: normalizeTheme(theme),
+        uiLocatorEnabled: normalizeBoolean(uiLocatorEnabled),
+        loaded: true,
+      };
+
+      applyTheme(next.theme);
+      set(next);
     } else {
-      set({ port: 8765, dbPath: '', theme: 'dark', uiLocatorEnabled: false, loaded: true });
-      get().setTheme('dark');
+      applyTheme(defaultSettings.theme);
+      set({ ...defaultSettings, loaded: true });
     }
   },
 
-  saveSettings: async () => {
-    const { port, dbPath, theme, uiLocatorEnabled } = get();
+  saveSettings: async (settings) => {
+    const current = get();
+    const next: SettingsSnapshot = {
+      port: normalizePort(settings?.port ?? current.port),
+      dbPath: settings?.dbPath ?? current.dbPath,
+      theme: normalizeTheme(settings?.theme ?? current.theme),
+      uiLocatorEnabled: normalizeBoolean(settings?.uiLocatorEnabled ?? current.uiLocatorEnabled),
+    };
+
     if (window.electronAPI) {
-      await window.electronAPI.settingsSet('port', port);
-      await window.electronAPI.settingsSet('dbPath', dbPath);
-      await window.electronAPI.settingsSet('theme', theme);
-      await window.electronAPI.settingsSet('uiLocatorEnabled', uiLocatorEnabled);
+      if (window.electronAPI.settingsSetAll) {
+        await window.electronAPI.settingsSetAll({ ...next });
+      } else {
+        await window.electronAPI.settingsSet('port', next.port);
+        await window.electronAPI.settingsSet('dbPath', next.dbPath);
+        await window.electronAPI.settingsSet('theme', next.theme);
+        await window.electronAPI.settingsSet('uiLocatorEnabled', next.uiLocatorEnabled);
+      }
     }
+
+    set({ ...next, loaded: true });
+    applyTheme(next.theme);
   },
 }));

@@ -1,5 +1,6 @@
 import type { TemplateDefinition } from '@/types/template';
 import TemplateCard from './TemplateCard';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 interface TemplateGridProps {
   templates: TemplateDefinition[];
@@ -8,6 +9,7 @@ interface TemplateGridProps {
   onEdit?: (template: TemplateDefinition) => void;
   onDelete?: (template: TemplateDefinition) => void;
   onCopy?: (template: TemplateDefinition) => void;
+  onContextMenu?: (event: ReactMouseEvent, template: TemplateDefinition) => void;
 }
 
 export default function TemplateGrid({
@@ -17,6 +19,7 @@ export default function TemplateGrid({
   onEdit,
   onDelete,
   onCopy,
+  onContextMenu,
 }: TemplateGridProps) {
   if (templates.length === 0) {
     return (
@@ -40,6 +43,7 @@ export default function TemplateGrid({
           onEdit={() => onEdit?.(template)}
           onDelete={() => onDelete?.(template)}
           onCopy={() => onCopy?.(template)}
+          onContextMenu={(event) => onContextMenu?.(event, template)}
         />
       ))}
     </div>

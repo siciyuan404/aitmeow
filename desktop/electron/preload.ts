@@ -8,16 +8,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsGet: (key: string) => ipcRenderer.invoke('settings:get', key),
   settingsSet: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value),
 
-  updateGetStatus: () => ipcRenderer.invoke('update:getStatus'),
+  updateGetState: () => ipcRenderer.invoke('update:getState'),
   updateCheck: () => ipcRenderer.invoke('update:check'),
-  updateOpenRelease: (releaseUrl?: string) => ipcRenderer.invoke('update:openRelease', releaseUrl),
-  updateOpenDownload: (assetUrl?: string) => ipcRenderer.invoke('update:openDownload', assetUrl),
+  updateDownload: () => ipcRenderer.invoke('update:download'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
 
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowClose: () => ipcRenderer.invoke('window:close'),
   windowIsMaximized: () => ipcRenderer.invoke('window:isMaximized'),
-  windowOpenSettings: () => ipcRenderer.invoke('window:openSettings'),
 
   onConnectionLog: (callback: (message: string) => void) => {
     const handler = (_event: IpcRendererEvent, message: string) => callback(message);
@@ -31,9 +30,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('connection:status-changed', handler);
   },
 
-  onSettingsReload: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on('settings:reload', handler);
-    return () => ipcRenderer.removeListener('settings:reload', handler);
+  onUpdateStateChanged: (callback: (state: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on('update:state-changed', handler);
+    return () => ipcRenderer.removeListener('update:state-changed', handler);
   },
 });

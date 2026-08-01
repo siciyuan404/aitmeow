@@ -1,6 +1,6 @@
 use crate::app_state::AppState;
 use aitmeow_core::rule::Rule;
-use aitmeow_core::svg::{render_svg, validate_svg, OutputFormat, RenderOptions};
+use aitmeow_core::svg::{render_svg, sanitize, validate_svg, OutputFormat, RenderOptions};
 use axum::{extract::State, http::StatusCode, Json};
 use serde::Deserialize;
 
@@ -20,6 +20,31 @@ pub struct RenderRequest {
     pub height: Option<u32>,
     #[serde(default)]
     pub background_color: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SanitizeRequest {
+    pub svg: String,
+}
+
+pub async fn sanitize_handler(
+    State(_state): State<AppState>,
+    Json(req): Json<SanitizeRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match sanitize(&req.svg) {
+        Ok(cleaned) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "sanitized": cleaned,
+                "input_bytes": req.svg.len(),
+                "output_bytes": cleaned.len(),
+            })),
+        ),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": e.to_string()})),
+        ),
+    }
 }
 
 pub async fn validate(

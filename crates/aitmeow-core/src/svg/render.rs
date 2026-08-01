@@ -28,12 +28,15 @@ impl Default for RenderOptions {
 }
 
 pub fn render_svg(input: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
+    // 所有输出路径都必须先消毒，避免 OutputFormat::Svg 直接回吐未过滤的原始字节。
+    let cleaned = crate::svg::sanitize::sanitize(input)?;
+
     let opt = usvg::Options::default();
-    let tree = usvg::Tree::from_str(input, &opt)
+    let tree = usvg::Tree::from_str(&cleaned, &opt)
         .map_err(|e| crate::error::AitmeowError::Render(format!("Parse error: {}", e)))?;
 
     match opts.format {
-        OutputFormat::Svg => Ok(input.as_bytes().to_vec()),
+        OutputFormat::Svg => Ok(cleaned.into_bytes()),
         OutputFormat::Png => {
             let size = tree.size();
             let width = opts

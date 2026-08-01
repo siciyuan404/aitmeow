@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import { registerIpcHandlers } from './ipc/registry';
+import { initUpdater, setMainWindow } from './ipc/handlers/update';
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
@@ -86,19 +87,24 @@ async function createWindow() {
       nodeIntegration: false,
     },
   });
+  setMainWindow(mainWindow);
 
   // 开发模式：优先连接 Vite dev server，不可用时才加载 dist 产物
-  const devServerUrl = 'http://localhost:5173';
+  // 注意：5173 常被 TRAE IDE 占用，vite 退到 5174，这里固定连 5174
+  const devServerUrl = 'http://localhost:5174';
   let loadedFromDev = false;
   try {
-    await fetch(devServerUrl);
-    await mainWindow.loadURL(devServerUrl);
-    loadedFromDev = true;
-    console.log('[main] loaded from dev server:', devServerUrl);
+    const res = await fetch(devServerUrl + '/@vite/client');
+    if (res.ok) {
+      await mainWindow.loadURL(devServerUrl);
+      loadedFromDev = true;
+      console.log('[main] loaded from dev server:', devServerUrl);
+    }
   } catch {
-    console.log('[main] dev server not available');
+    // dev server 未启动
   }
   if (!loadedFromDev) {
+    console.log('[main] dev server not available');
     const distPath = path.join(__dirname, '../dist/index.html');
     const fs = require('fs');
     if (fs.existsSync(distPath)) {
@@ -111,11 +117,13 @@ async function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    setMainWindow(null);
   });
 }
 
 app.whenReady().then(() => {
   registerIpcHandlers();
+  initUpdater();
   startServer();
   createWindow();
 

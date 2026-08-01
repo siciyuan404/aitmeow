@@ -1,218 +1,218 @@
-import { app, ipcMain, shell } from 'electron';
-import https from 'https';
+import { app, ipcMain, BrowserWindow } from 'electron';
+import { autoUpdater, type ProgressInfo, type UpdateInfo } from 'electron-updater';
 
-const DEFAULT_REPOSITORY = 'siciyuan404/aitmeow';
-const WINDOWS_PACKAGE_ASSET = 'AitMeow-win32-x64.zip';
+// ── 状态机 ─────────────────────────────────────────────────────────
+// Idle ──> Checking ──> Available ──> Downloading ──> Ready ──> Restarting
+//   │                                                       │
+//   └──> NotAvailable <─── (check 完成，无新版本)            │
+//   │                                                       │
+//   └──────────── Error <───────────────────────────────────┘
+//   │
+//   └── (retry from Error goes back to Checking)
 
-interface GitHubReleaseAsset {
-  name: string;
-  browser_download_url: string;
-  size: number;
-  updated_at?: string;
-}
+type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'ready'
+  | 'error';
 
-interface GitHubRelease {
-  tag_name: string;
-  name?: string;
-  html_url: string;
-  body?: string | null;
-  draft: boolean;
-  prerelease: boolean;
-  published_at?: string | null;
-  assets: GitHubReleaseAsset[];
-}
-
-interface UpdateStatus {
+interface UpdateState {
+  seq: number;
+  status: UpdateStatus;
   currentVersion: string;
-  repository: string;
-  releasesUrl: string;
-  platform: NodeJS.Platform;
-  arch: string;
-  expectedAssetName: string;
-}
-
-interface UpdateCheckResult extends UpdateStatus {
-  latestVersion: string | null;
-  latestTag: string | null;
-  updateAvailable: boolean;
-  releaseName?: string;
-  releaseUrl?: string;
-  releaseNotes?: string | null;
-  publishedAt?: string | null;
-  assetName?: string;
-  assetUrl?: string;
-  assetSize?: number;
-}
-
-interface ParsedVersion {
-  major: number;
-  minor: number;
-  patch: number;
-  prerelease: string | null;
-}
-
-function updateRepository(): string {
-  return process.env.AITMEOW_UPDATE_REPO || DEFAULT_REPOSITORY;
-}
-
-function releasesUrl(repository = updateRepository()): string {
-  return `https://github.com/${repository}/releases`;
-}
-
-function latestReleaseApiUrl(repository = updateRepository()): string {
-  return `https://api.github.com/repos/${repository}/releases/latest`;
-}
-
-function status(): UpdateStatus {
-  const repository = updateRepository();
-  return {
-    currentVersion: app.getVersion(),
-    repository,
-    releasesUrl: releasesUrl(repository),
-    platform: process.platform,
-    arch: process.arch,
-    expectedAssetName: WINDOWS_PACKAGE_ASSET,
+  isPackaged: boolean;
+  info?: {
+    version: string;
+    releaseName?: string;
+    releaseNotes?: string;
+    releaseDate?: string;
   };
+  progress?: {
+    percent: number;
+    transferred: number;
+    total: number;
+    bytesPerSecond: number;
+  };
+  error?: string;
 }
 
-function requestJson<T>(url: string, redirects = 0): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(
-      url,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'User-Agent': `aitmeow/${app.getVersion()}`,
-        },
-      },
-      (res) => {
-        const statusCode = res.statusCode ?? 0;
-        const location = res.headers.location;
+let state: UpdateState = {
+  seq: 0,
+  status: 'idle',
+  currentVersion: app.getVersion(),
+  isPackaged: app.isPackaged,
+};
 
-        if (statusCode >= 300 && statusCode < 400 && location) {
-          res.resume();
-          if (redirects >= 3) {
-            reject(new Error('GitHub release request redirected too many times'));
-            return;
-          }
-          requestJson<T>(location, redirects + 1).then(resolve, reject);
-          return;
-        }
+let mainWindow: BrowserWindow | null = null;
 
-        if (statusCode < 200 || statusCode >= 300) {
-          res.resume();
-          reject(new Error(`GitHub release request failed with HTTP ${statusCode}`));
-          return;
-        }
+// 进度节流：最多每 100ms 发一次 live event
+let lastProgressEmit = 0;
 
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString('utf-8')) as T);
-          } catch (err) {
-            reject(err);
-          }
-        });
-      },
-    );
+function emit(partial: Partial<UpdateState>): void {
+  state = { ...state, ...partial, seq: state.seq + 1 };
+  mainWindow?.webContents.send('update:state-changed', state);
+}
 
-    req.setTimeout(15000, () => {
-      req.destroy(new Error('GitHub release request timed out'));
+function getState(): UpdateState {
+  return state;
+}
+
+export function setMainWindow(win: BrowserWindow | null): void {
+  mainWindow = win;
+}
+
+function normalizeReleaseNotes(notes: UpdateInfo['releaseNotes']): string | undefined {
+  if (!notes) return undefined;
+  if (typeof notes === 'string') return notes;
+  if (Array.isArray(notes)) return notes.map((n) => (typeof n === 'string' ? n : n.note)).join('\n');
+  return undefined;
+}
+
+function classifyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/ETIMEDOUT|ENOTFOUND|ECONNREFUSED|ECONNRESET|socket hang up/i.test(msg)) {
+    return '无法连接更新服务器，请检查网络后重试';
+  }
+  if (/404|Not Found/i.test(msg)) {
+    return '未找到更新发布源';
+  }
+  if (/certificate|ssl|tls/i.test(msg)) {
+    return '安全验证失败，请检查网络环境';
+  }
+  return msg;
+}
+
+export function initUpdater(): void {
+  // 手动控制下载和安装，不由 autoUpdater 自动触发
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  // 开发模式下也允许检查（electron-updater 会读 dev-app-update.yml 或报错）
+  autoUpdater.allowDowngrade = false;
+
+  autoUpdater.on('checking-for-update', () => {
+    lastProgressEmit = 0;
+    emit({
+      status: 'checking',
+      error: undefined,
+      info: undefined,
+      progress: undefined,
     });
-    req.on('error', reject);
+  });
+
+  autoUpdater.on('update-available', (info: UpdateInfo) => {
+    emit({
+      status: 'available',
+      info: {
+        version: info.version,
+        releaseName: info.releaseName ?? undefined,
+        releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+        releaseDate: info.releaseDate,
+      },
+      progress: undefined,
+      error: undefined,
+    });
+  });
+
+  autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+    emit({
+      status: 'not-available',
+      info: info.version
+        ? {
+            version: info.version,
+            releaseName: info.releaseName ?? undefined,
+            releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+            releaseDate: info.releaseDate,
+          }
+        : undefined,
+    });
+  });
+
+  autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+    const now = Date.now();
+    // 首字节和末字节始终发送；中间节流到 100ms
+    const isFirst = progress.transferred === progress.total || progress.percent >= 100;
+    const isStart = progress.transferred === 0;
+    if (!isFirst && !isStart && now - lastProgressEmit < 100) return;
+    lastProgressEmit = now;
+
+    emit({
+      status: 'downloading',
+      progress: {
+        percent: progress.percent,
+        transferred: progress.transferred,
+        total: progress.total,
+        bytesPerSecond: progress.bytesPerSecond,
+      },
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+    emit({
+      status: 'ready',
+      info: {
+        version: info.version,
+        releaseName: info.releaseName ?? undefined,
+        releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+        releaseDate: info.releaseDate,
+      },
+      progress: undefined,
+      error: undefined,
+    });
+  });
+
+  autoUpdater.on('error', (err: Error) => {
+    emit({
+      status: 'error',
+      error: classifyError(err),
+    });
   });
 }
 
-function parseVersion(version: string): ParsedVersion | null {
-  const normalized = version.trim().replace(/^v/i, '');
-  const [core, prerelease = null] = normalized.split('-', 2);
-  const parts = core.split('.').map((part) => Number(part));
+export function registerUpdateHandlers(): void {
+  ipcMain.handle('update:getState', () => getState());
 
-  if (parts.length < 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
-    return null;
-  }
-
-  return {
-    major: parts[0],
-    minor: parts[1],
-    patch: parts[2],
-    prerelease,
-  };
-}
-
-function compareVersions(a: string, b: string): number {
-  const left = parseVersion(a);
-  const right = parseVersion(b);
-
-  if (!left || !right) {
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-  }
-
-  for (const key of ['major', 'minor', 'patch'] as const) {
-    if (left[key] !== right[key]) return left[key] > right[key] ? 1 : -1;
-  }
-
-  if (left.prerelease === right.prerelease) return 0;
-  if (!left.prerelease) return 1;
-  if (!right.prerelease) return -1;
-  return left.prerelease.localeCompare(right.prerelease, undefined, {
-    numeric: true,
-    sensitivity: 'base',
-  });
-}
-
-function findWindowsPackage(release: GitHubRelease): GitHubReleaseAsset | undefined {
-  return (
-    release.assets.find((asset) => asset.name === WINDOWS_PACKAGE_ASSET)
-    ?? release.assets.find((asset) => {
-      const name = asset.name.toLowerCase();
-      return name.endsWith('.zip') && name.includes('win32') && name.includes('x64');
-    })
-  );
-}
-
-async function checkForUpdates(): Promise<UpdateCheckResult> {
-  const base = status();
-  const release = await requestJson<GitHubRelease>(latestReleaseApiUrl(base.repository));
-  const asset = findWindowsPackage(release);
-  const latestVersion = release.tag_name.replace(/^v/i, '');
-
-  return {
-    ...base,
-    latestVersion,
-    latestTag: release.tag_name,
-    updateAvailable: compareVersions(latestVersion, base.currentVersion) > 0,
-    releaseName: release.name || release.tag_name,
-    releaseUrl: release.html_url,
-    releaseNotes: release.body ?? null,
-    publishedAt: release.published_at ?? null,
-    assetName: asset?.name,
-    assetUrl: asset?.browser_download_url,
-    assetSize: asset?.size,
-  };
-}
-
-export function registerUpdateHandlers() {
-  ipcMain.handle('update:getStatus', async () => status());
-
-  ipcMain.handle('update:check', async () => checkForUpdates());
-
-  ipcMain.handle('update:openRelease', async (_event, releaseUrl?: string) => {
-    const target = releaseUrl || releasesUrl();
-    await shell.openExternal(target);
-    return { success: true, url: target };
-  });
-
-  ipcMain.handle('update:openDownload', async (_event, assetUrl?: string) => {
-    let target = assetUrl;
-
-    if (!target) {
-      const result = await checkForUpdates();
-      target = result.assetUrl || result.releaseUrl || result.releasesUrl;
+  ipcMain.handle('update:check', async () => {
+    if (!app.isPackaged) {
+      return { success: false, error: '开发环境不支持更新检查' };
     }
+    // 仅 Idle / NotAvailable / Error 状态允许重新检查
+    if (state.status !== 'idle' && state.status !== 'not-available' && state.status !== 'error') {
+      return { success: false, error: '更新检查正在进行中' };
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+      return { success: true };
+    } catch (err) {
+      emit({ status: 'error', error: classifyError(err) });
+      return { success: false, error: classifyError(err) };
+    }
+  });
 
-    await shell.openExternal(target);
-    return { success: true, url: target };
+  ipcMain.handle('update:download', async () => {
+    if (state.status !== 'available') {
+      return { success: false, error: '当前状态不允许下载' };
+    }
+    try {
+      // downloadUpdate 返回下载完成的信号；期间 download-progress 事件会更新状态
+      await autoUpdater.downloadUpdate();
+      return { success: true };
+    } catch (err) {
+      emit({ status: 'error', error: classifyError(err) });
+      return { success: false, error: classifyError(err) };
+    }
+  });
+
+  ipcMain.handle('update:install', () => {
+    if (state.status !== 'ready') {
+      return { success: false, error: '更新尚未就绪' };
+    }
+    // 延迟执行，让 IPC 响应先返回给渲染器
+    setImmediate(() => {
+      autoUpdater.quitAndInstall(false, true);
+    });
+    return { success: true };
   });
 }

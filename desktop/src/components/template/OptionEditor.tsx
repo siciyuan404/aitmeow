@@ -4,9 +4,10 @@ import type { TemplateOption } from '@/types/template';
 interface OptionEditorProps {
   options: TemplateOption[];
   onChange: (options: TemplateOption[]) => void;
+  showAddButton?: boolean;
 }
 
-export default function OptionEditor({ options, onChange }: OptionEditorProps) {
+export default function OptionEditor({ options, onChange, showAddButton = true }: OptionEditorProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -84,16 +85,18 @@ export default function OptionEditor({ options, onChange }: OptionEditorProps) {
         <label className="block text-sm font-medium text-slate-700">
           参数选项 ({options.length})
         </label>
-        <button
-          type="button"
-          onClick={addOption}
-          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          添加参数
-        </button>
+        {showAddButton && (
+          <button
+            type="button"
+            onClick={addOption}
+            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            添加参数
+          </button>
+        )}
       </div>
 
       {options.length === 0 && (
@@ -198,6 +201,34 @@ interface OptionFormProps {
 }
 
 function OptionForm({ option, onChange }: OptionFormProps) {
+  const handleTypeChange = (type: TemplateOption['type']) => {
+    onChange(convertOptionType(option, type));
+  };
+
+  const handleSelectOptionsChange = (value: string) => {
+    const nextOptions = value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (option.type === 'multiselect') {
+      // multiselect 默认值是逗号分隔的，只保留仍存在的选项
+      const currentDefaults = option.default ? option.default.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const validDefaults = currentDefaults.filter(d => nextOptions.includes(d));
+      onChange({
+        ...option,
+        options: nextOptions,
+        default: validDefaults.join(','),
+      });
+    } else {
+      onChange({
+        ...option,
+        options: nextOptions,
+        default: nextOptions.includes(option.default) ? option.default : nextOptions[0] || '',
+      });
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -222,13 +253,17 @@ function OptionForm({ option, onChange }: OptionFormProps) {
           </label>
           <select
             value={option.type}
-            onChange={(e) => onChange({ ...option, type: e.target.value as TemplateOption['type'] })}
+            onChange={(e) => handleTypeChange(e.target.value as TemplateOption['type'])}
             className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
           >
             <option value="text">文本输入</option>
+            <option value="textarea">多行文本</option>
+            <option value="number">数字输入</option>
+            <option value="range">范围滑块</option>
+            <option value="boolean">开关 (Boolean)</option>
             <option value="color">颜色选择器</option>
             <option value="select">下拉选择</option>
-            <option value="range">范围滑块</option>
+            <option value="multiselect">多选 (MultiSelect)</option>
           </select>
         </div>
       </div>
@@ -252,17 +287,57 @@ function OptionForm({ option, onChange }: OptionFormProps) {
         <label className="block text-xs font-medium text-slate-600 mb-1">
           默认值 <span className="text-red-500">*</span>
         </label>
-        <input
-          type="text"
-          value={option.default}
-          onChange={(e) => onChange({ ...option, default: e.target.value })}
-          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
-          placeholder={getDefaultPlaceholder(option.type)}
-        />
+        {option.type === 'select' ? (
+          <select
+            value={option.default}
+            onChange={(e) => onChange({ ...option, default: e.target.value })}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+          >
+            {(option.options || []).map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+            {(option.options || []).length === 0 && <option value="">先添加选项</option>}
+          </select>
+        ) : option.type === 'boolean' ? (
+          <select
+            value={option.default}
+            onChange={(e) => onChange({ ...option, default: e.target.value })}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+          >
+            <option value="false">false</option>
+            <option value="true">true</option>
+          </select>
+        ) : option.type === 'color' ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={option.default || '#000000'}
+              onChange={(e) => onChange({ ...option, default: e.target.value })}
+              className="h-8 w-12 border border-slate-200 rounded cursor-pointer"
+            />
+            <input
+              type="text"
+              value={option.default}
+              onChange={(e) => onChange({ ...option, default: e.target.value })}
+              className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm font-mono bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+              placeholder="#000000"
+            />
+          </div>
+        ) : (
+          <input
+            type={option.type === 'range' || option.type === 'number' ? 'number' : 'text'}
+            value={option.default}
+            onChange={(e) => onChange({ ...option, default: e.target.value })}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+            placeholder={getDefaultPlaceholder(option.type)}
+          />
+        )}
       </div>
 
       {/* Type-specific fields */}
-      {option.type === 'text' && (
+      {(option.type === 'text' || option.type === 'textarea' || option.type === 'number') && (
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">
             占位符文本
@@ -277,40 +352,58 @@ function OptionForm({ option, onChange }: OptionFormProps) {
         </div>
       )}
 
-      {option.type === 'select' && (
+      {option.type === 'textarea' && (
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">显示行数</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={option.rows ?? 4}
+            onChange={(e) => onChange({ ...option, rows: Number(e.target.value) })}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+          />
+        </div>
+      )}
+
+      {(option.type === 'select' || option.type === 'multiselect') && (
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">
             选项列表 <span className="text-red-500">*</span>
           </label>
           <textarea
             value={(option.options || []).join('\n')}
-            onChange={(e) => onChange({ ...option, options: e.target.value.split('\n').filter(Boolean) })}
+            onChange={(e) => handleSelectOptionsChange(e.target.value)}
             rows={4}
             className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm font-mono bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none resize-none"
             placeholder="每行一个选项..."
           />
-          <p className="text-xs text-slate-500 mt-1">每行输入一个选项值</p>
+          <p className="text-xs text-slate-500 mt-1">
+            每行输入一个选项值{option.type === 'multiselect' ? '，多选默认值用逗号分隔' : ''}
+          </p>
         </div>
       )}
 
-      {option.type === 'range' && (
+      {(option.type === 'range' || option.type === 'number') && (
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">最小值</label>
             <input
               type="number"
-              value={option.min ?? 1}
-              onChange={(e) => onChange({ ...option, min: Number(e.target.value) })}
+              value={option.min ?? (option.type === 'range' ? 1 : '')}
+              onChange={(e) => onChange({ ...option, min: e.target.value === '' ? undefined : Number(e.target.value) })}
               className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+              placeholder={option.type === 'number' ? '不限' : '1'}
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">最大值</label>
             <input
               type="number"
-              value={option.max ?? 10}
-              onChange={(e) => onChange({ ...option, max: Number(e.target.value) })}
+              value={option.max ?? (option.type === 'range' ? 10 : '')}
+              onChange={(e) => onChange({ ...option, max: e.target.value === '' ? undefined : Number(e.target.value) })}
               className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+              placeholder={option.type === 'number' ? '不限' : '10'}
             />
           </div>
           <div>
@@ -329,21 +422,113 @@ function OptionForm({ option, onChange }: OptionFormProps) {
 }
 
 function getTypeLabel(type: TemplateOption['type']): string {
-  const labels = {
+  const labels: Record<TemplateOption['type'], string> = {
     text: '文本',
     color: '颜色',
     select: '选择',
     range: '范围',
+    boolean: '开关',
+    number: '数字',
+    textarea: '多行文本',
+    multiselect: '多选',
   };
   return labels[type] || type;
 }
 
 function getDefaultPlaceholder(type: TemplateOption['type']): string {
-  const placeholders = {
+  const placeholders: Record<TemplateOption['type'], string> = {
     text: '输入默认文本...',
     color: '#000000',
     select: '第一个选项值',
     range: '5',
+    boolean: 'true / false',
+    number: '0',
+    textarea: '输入多行文本...',
+    multiselect: '逗号分隔的选项',
   };
   return placeholders[type] || '';
+}
+
+function getDefaultValueForType(type: TemplateOption['type']): string {
+  const defaults: Record<TemplateOption['type'], string> = {
+    text: '',
+    color: '#000000',
+    select: '选项1',
+    range: '5',
+    boolean: 'false',
+    number: '0',
+    textarea: '',
+    multiselect: '',
+  };
+  return defaults[type] || '';
+}
+
+function convertOptionType(option: TemplateOption, type: TemplateOption['type']): TemplateOption {
+  const base = {
+    key: option.key,
+    label: option.label,
+    type,
+    default: option.default || getDefaultValueForType(type),
+  };
+
+  if (type === 'select' || type === 'multiselect') {
+    const options = (option.type === 'select' || option.type === 'multiselect') && option.options?.length
+      ? option.options
+      : ['选项1', '选项2', '选项3'];
+    if (type === 'multiselect') {
+      return {
+        ...base,
+        default: '',
+        options,
+      };
+    }
+    return {
+      ...base,
+      default: options.includes(option.default) ? option.default : options[0],
+      options,
+    };
+  }
+
+  if (type === 'text' || type === 'textarea') {
+    return {
+      ...base,
+      default: (option.type === 'select' || option.type === 'multiselect') ? '' : base.default,
+      placeholder: option.placeholder || '',
+      ...(type === 'textarea' ? { rows: option.rows ?? 4 } : {}),
+    };
+  }
+
+  if (type === 'range') {
+    return {
+      ...base,
+      default: Number.isFinite(Number(option.default)) ? option.default : '5',
+      min: option.min ?? 1,
+      max: option.max ?? 10,
+      step: option.step ?? 1,
+    };
+  }
+
+  if (type === 'number') {
+    return {
+      ...base,
+      default: Number.isFinite(Number(option.default)) ? option.default : '0',
+      min: option.min,
+      max: option.max,
+      step: option.step ?? 1,
+      placeholder: option.placeholder || '',
+    };
+  }
+
+  if (type === 'boolean') {
+    return {
+      ...base,
+      default: option.default === 'true' ? 'true' : 'false',
+    };
+  }
+
+  // color
+  return {
+    ...base,
+    default: /^#[0-9a-f]{6}$/i.test(option.default) ? option.default : '#000000',
+  };
 }

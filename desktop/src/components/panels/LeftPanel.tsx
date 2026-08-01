@@ -1,4 +1,9 @@
-import { useState, useEffect } from 'react';
+import {
+  useState,
+  useEffect,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { toast } from 'sonner';
 import { api, type Template, type TemplateOption } from '@/services/api';
 import { useConnectionStore } from '@/stores/connectionStore';
@@ -24,21 +29,26 @@ export default function LeftPanel({
   const { createTemplate, updateTemplate, deleteTemplate } = useTemplateStore();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['brand']));
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [referenceSvg, setReferenceSvg] = useState<{ id: string; name: string; svg_content: string } | null>(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [optionsHeight, setOptionsHeight] = useState(280);
+  const [templateMenu, setTemplateMenu] = useState<{ x: number; y: number; template?: Template } | null>(null);
 
   useEffect(() => {
     if (!connected) return;
     api.listTemplates().then((d) => {
       setTemplates(d.templates);
       setCategories(d.categories);
-      const all = new Set<string>();
-      d.categories.forEach((c) => all.add(c));
-      setExpanded(all);
+      setActiveCategory((current) => (current && d.categories.includes(current) ? current : null));
+      if (d.templates.length === 0) {
+        onSelectTemplate(null);
+        onParamsChange({});
+      }
     }).catch((err: Error) => toast.error('加载模板失败: ' + err.message));
-  }, [connected]);
+  }, [connected, onSelectTemplate, onParamsChange]);
 
   useEffect(() => {
     if (!connected) return;
@@ -55,14 +65,6 @@ export default function LeftPanel({
     if (!byCategory.has(c)) byCategory.set(c, []);
     byCategory.get(c)!.push(t);
   });
-
-  const toggleCat = (cat: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat); else next.add(cat);
-      return next;
-    });
-  };
 
   const handleParamChange = (key: string, value: string) => {
     onParamsChange({ ...templateParams, [key]: value });
@@ -93,6 +95,12 @@ export default function LeftPanel({
         // Refresh local templates list
         const res = await api.listTemplates();
         setTemplates(res.templates);
+        setCategories(res.categories);
+        setActiveCategory((current) => (current && res.categories.includes(current) ? current : null));
+        if (selectedTemplate?.name === editingTemplate.name) {
+          const refreshed = res.templates.find((item) => item.name === tmpl.name) || null;
+          onSelectTemplate(refreshed);
+        }
       } else {
         await createTemplate(tmpl);
         toast.success('模板已创建');
@@ -102,6 +110,7 @@ export default function LeftPanel({
         setCategories(res.categories);
       }
       setShowEditor(false);
+      setEditingTemplate(null);
     } catch (err: any) {
       toast.error(err.message || '保存失败');
       throw err;
@@ -109,6 +118,7 @@ export default function LeftPanel({
   };
 
   const handleDeleteTemplate = async (name: string) => {
+    setTemplateMenu(null);
     if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
     try {
       await deleteTemplate(name);
@@ -116,7 +126,12 @@ export default function LeftPanel({
       // Refresh local templates list
       const res = await api.listTemplates();
       setTemplates(res.templates);
-      setCategories(res.categories);  // Fix: update categories too
+      setCategories(res.categories);
+      setActiveCategory((current) => (current && res.categories.includes(current) ? current : null));
+      if (selectedTemplate?.name === name) {
+        onSelectTemplate(null);
+        onParamsChange({});
+      }
     } catch (err: any) {
       toast.error(err.message || '删除失败');
     }
@@ -130,53 +145,118 @@ export default function LeftPanel({
     infographic: '信息图',
   };
 
+  const visibleTemplates = activeCategory
+    ? byCategory.get(activeCategory) || []
+    : templates;
+
+  const handleTemplateContextMenu = (tmpl: Template, event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTemplateMenu({
+      x: Math.min(event.clientX, window.innerWidth - 168),
+      y: Math.min(event.clientY, window.innerHeight - 56),
+      template: tmpl,
+    });
+  };
+
+  const handlePanelContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTemplateMenu({
+      x: Math.min(event.clientX, window.innerWidth - 168),
+      y: Math.min(event.clientY, window.innerHeight - 56),
+    });
+  };
+
+  const handleOptionsResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = optionsHeight;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = startHeight - (moveEvent.clientY - startY);
+      setOptionsHeight(Math.min(420, Math.max(180, nextHeight)));
+    };
+
+    const handlePointerUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+  };
+
   return (
     <aside className="w-72 border-r border-slate-200 bg-white flex flex-col shrink-0">
       {/* fixed header */}
-      <div className="p-3 pb-0 shrink-0 flex items-center justify-between">
+      <div
+        className="p-3 pb-0 shrink-0 flex items-center justify-between"
+        onContextMenu={handlePanelContextMenu}
+      >
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
           模板
         </div>
-        <button
-          onClick={handleCreateTemplate}
-          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-2"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          创建
-        </button>
       </div>
 
-      {/* scrollable template list */}
-      <div className="flex-1 overflow-y-auto px-3 pb-2">
-        {categories.map((cat) => (
-          <div key={cat} className="mb-1">
-            <button
-              onClick={() => toggleCat(cat)}
-              className="flex items-center justify-between w-full p-2 hover:bg-slate-50 rounded-lg text-slate-700 font-medium text-sm transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <svg className="w-[14px] h-[14px] text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-                {catLabel[cat] || cat}
-              </span>
-              <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-semibold">
-                {byCategory.get(cat)?.length || 0}
-              </span>
-            </button>
+      <div className="flex-1 overflow-y-auto px-3 pb-3" onContextMenu={handlePanelContextMenu}>
+        {connected && categories.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <CategoryChip
+              label="全部"
+              count={templates.length}
+              active={activeCategory === null}
+              onClick={() => setActiveCategory(null)}
+            />
+            {categories.map((cat) => (
+              <CategoryChip
+                key={cat}
+                label={catLabel[cat] || cat}
+                count={byCategory.get(cat)?.length || 0}
+                active={activeCategory === cat}
+                onClick={() => setActiveCategory(cat)}
+              />
+            ))}
+          </div>
+        )}
 
-            {expanded.has(cat) && (byCategory.get(cat) || []).map((tmpl) => (
+        {connected && visibleTemplates.length > 0 && (
+          <div className="space-y-1">
+            {visibleTemplates.map((tmpl) => (
               <TemplateCard
                 key={tmpl.name}
                 template={tmpl}
                 selected={selectedTemplate?.name === tmpl.name}
                 onSelect={() => onSelectTemplate(tmpl)}
+                onContextMenu={(event) => handleTemplateContextMenu(tmpl, event)}
               />
             ))}
           </div>
-        ))}
+        )}
+
+        {connected && templates.length === 0 && (
+          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h10" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-slate-700">暂无模板</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">模板功能待重构，当前模板列表已清空。</p>
+          </div>
+        )}
+
+        {connected && templates.length > 0 && visibleTemplates.length === 0 && (
+          <p className="py-8 text-center text-xs text-slate-500">当前分类暂无模板</p>
+        )}
 
         {!connected && (
           <p className="text-slate-500 text-xs text-center py-8">连接服务端以加载模板</p>
@@ -199,32 +279,127 @@ export default function LeftPanel({
         </div>
       )}
 
-      {/* options section — fixed bottom when template selected */}
-      {selectedTemplate && selectedTemplate.options.length > 0 && (
-        <div className="border-t border-slate-200 px-3 py-2.5 shrink-0 max-h-[280px] overflow-y-auto">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">选项</div>
-          {selectedTemplate.options.map((opt) => (
-            <OptionField
-              key={opt.key}
-              option={opt}
-              value={templateParams[opt.key] || opt.default || ''}
-              onChange={(v) => handleParamChange(opt.key, v)}
-            />
-          ))}
+      {selectedTemplate && (
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          title="拖拽调整选项区域高度"
+          onPointerDown={handleOptionsResizeStart}
+          className="group relative h-2 shrink-0 cursor-row-resize border-t border-slate-200 bg-white transition-colors hover:bg-blue-50"
+        >
+          <div className="absolute left-1/2 top-1/2 h-0.5 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
       )}
 
-      {/* compiled prompt preview */}
       {selectedTemplate && (
-        <div className="border-t border-slate-200 px-3 py-2.5 shrink-0">
-          <div className="flex items-center gap-1.5 mb-2 px-1">
-            <svg className="w-3 h-3 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Agent 提示词预览</span>
+        <div
+          className="flex min-h-0 shrink-0 flex-col bg-slate-50 px-3 pb-3 pt-2"
+          style={{ height: optionsHeight }}
+        >
+          <div className="mb-2 flex shrink-0 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">选项</div>
+              <div className="mt-1 truncate text-xs font-semibold text-slate-800">
+                {selectedTemplate.description || selectedTemplate.name}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPromptPreview(true)}
+              className="shrink-0 rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-50"
+            >
+              查看提示词
+            </button>
           </div>
-          <div className="bg-violet-50/50 border border-violet-200/60 rounded-xl p-2.5 text-[11px] text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[160px] overflow-y-auto">
-            {compilePrompt(selectedTemplate, templateParams)}
+
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white px-2 py-2">
+            {selectedTemplate.options.length > 0 ? (
+              selectedTemplate.options.map((opt) => (
+                <OptionField
+                  key={opt.key}
+                  option={opt}
+                  value={templateParams[opt.key] || opt.default || ''}
+                  onChange={(v) => handleParamChange(opt.key, v)}
+                />
+              ))
+            ) : (
+              <p className="px-1 py-2 text-xs text-slate-500">该模板没有可配置选项。</p>
+            )}
           </div>
         </div>
+      )}
+
+      {selectedTemplate && showPromptPreview && (
+        <PromptPreviewDialog
+          prompt={compilePrompt(selectedTemplate, templateParams)}
+          onClose={() => setShowPromptPreview(false)}
+        />
+      )}
+
+      {templateMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setTemplateMenu(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setTemplateMenu(null);
+            }}
+          />
+          <div
+            className="fixed z-50 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/10"
+            style={{ left: templateMenu.x, top: templateMenu.y }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setTemplateMenu(null);
+                handleCreateTemplate();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              添加模板
+            </button>
+            {templateMenu.template && (
+              <>
+                <div className="my-1 h-px bg-slate-200" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tmpl = templateMenu.template!;
+                    setTemplateMenu(null);
+                    handleEditTemplate(tmpl);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                  </svg>
+                  编辑模板
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTemplate(templateMenu.template!.name)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                  </svg>
+                  删除模板
+                </button>
+              </>
+            )}
+          </div>
+        </>
       )}
 
       {/* Editor Modal */}
@@ -232,7 +407,10 @@ export default function LeftPanel({
         <TemplateEditor
           template={editingTemplate}
           onSave={handleSaveTemplate}
-          onCancel={() => setShowEditor(false)}
+          onCancel={() => {
+            setShowEditor(false);
+            setEditingTemplate(null);
+          }}
         />
       )}
     </aside>
@@ -252,30 +430,104 @@ function compilePrompt(tmpl: Template, params: Record<string, string>): string {
   return result;
 }
 
+function CategoryChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-medium transition-colors ${
+        active
+          ? 'border-blue-200 bg-blue-50 text-blue-700'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+      }`}
+    >
+      <span className="max-w-[92px] truncate">{label}</span>
+      <span className={active ? 'text-blue-600' : 'text-slate-400'}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function PromptPreviewDialog({
+  prompt,
+  onClose,
+}: {
+  prompt: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="prompt-preview-title"
+        onClick={(event) => event.stopPropagation()}
+        className="relative flex max-h-[min(560px,calc(100vh-48px))] w-[min(560px,calc(100vw-48px))] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+      >
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4">
+          <div className="flex items-center gap-2">
+            <svg className="h-4 w-4 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            <h3 id="prompt-preview-title" className="text-sm font-semibold text-slate-900">Agent 提示词预览</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            title="关闭"
+            aria-label="关闭提示词预览"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-violet-50/30 p-4">
+          <pre className="whitespace-pre-wrap break-words rounded-lg border border-violet-200/70 bg-white p-3 text-xs leading-6 text-slate-700">
+            {prompt}
+          </pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TemplateCard({
   template,
   selected,
   onSelect,
+  onContextMenu,
 }: {
   template: Template;
   selected: boolean;
   onSelect: () => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }) {
   const Icon = getIconForValue(template.name);
   return (
     <div
       onClick={onSelect}
-      className={`ml-3 p-2.5 rounded-xl border flex items-center gap-3 cursor-pointer transition-all mb-1 relative ${
+      onContextMenu={onContextMenu}
+      className={`p-2.5 rounded-lg border flex items-center gap-3 cursor-pointer transition-all relative ${
         selected
-          ? 'border-blue-500 ring-1 ring-blue-500/10 bg-white shadow-md shadow-blue-500/5'
+          ? 'border-blue-500 ring-1 ring-inset ring-blue-500 bg-white'
           : 'border-slate-200 hover:border-slate-300 bg-white shadow-sm shadow-slate-50'
       }`}
     >
-      {selected && (
-        <div className="absolute right-2 top-2 w-4 h-4 bg-blue-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold">
-          ✓
-        </div>
-      )}
       <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
         {Icon ? (
           <Icon className="w-4 h-4" />
@@ -294,7 +546,18 @@ function TemplateCard({
 }
 
 function OptionField({ option, value, onChange }: { option: TemplateOption; value: string; onChange: (v: string) => void }) {
-  const { label, type, placeholder, options, default: def, min, max, step } = option;
+  const { label, type, placeholder, options, default: def, min, max, step, rows } = option;
+
+  // multiselect: value 是逗号分隔的字符串，转为 Set 便于勾选
+  const multiValues = type === 'multiselect' ? new Set((value || '').split(',').map(s => s.trim()).filter(Boolean)) : null;
+
+  const toggleMulti = (item: string) => {
+    if (!multiValues) return;
+    const next = new Set(multiValues);
+    if (next.has(item)) next.delete(item); else next.add(item);
+    onChange(Array.from(next).join(','));
+  };
+
   return (
     <div className="flex flex-col gap-1 px-1 mb-2.5">
       <label className="text-[11px] font-medium text-slate-600">{label}</label>
@@ -308,10 +571,44 @@ function OptionField({ option, value, onChange }: { option: TemplateOption; valu
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || ''}
           className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px] placeholder:text-slate-400" />
       )}
+      {type === 'textarea' && (
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || ''} rows={rows || 4}
+          className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px] placeholder:text-slate-400 resize-none" />
+      )}
+      {type === 'number' && (
+        <input type="number" value={value} onChange={(e) => onChange(e.target.value)}
+          min={min} max={max} step={step || 1} placeholder={placeholder || ''}
+          className="w-full border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 text-slate-700 outline-none text-[11px] placeholder:text-slate-400" />
+      )}
       {type === 'range' && (
         <div className="flex items-center gap-2">
           <input type="range" min={min || 0} max={max || 100} step={step || 1} value={value} onChange={(e) => onChange(e.target.value)} className="flex-1" />
           <span className="text-[10px] text-slate-500 w-8 text-right">{value}</span>
+        </div>
+      )}
+      {type === 'boolean' && (
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={value === 'true'} onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+          <span className="text-[11px] text-slate-600">{value === 'true' ? '是' : '否'}</span>
+        </label>
+      )}
+      {type === 'multiselect' && options && (
+        <div className="flex flex-wrap gap-1.5">
+          {options.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => toggleMulti(item)}
+              className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                multiValues?.has(item)
+                  ? 'border-blue-300 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              {item}
+            </button>
+          ))}
         </div>
       )}
     </div>

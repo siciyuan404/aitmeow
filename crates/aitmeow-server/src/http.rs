@@ -18,6 +18,7 @@ pub fn create_router(state: AppState) -> Router {
 	Router::new()
 		.route("/api/validate", post(svg::validate))
 		.route("/api/render", post(svg::render))
+		.route("/api/sanitize", post(svg::sanitize_handler))
 		.route("/api/svg", get(repo::list_svgs).post(repo::save_svg))
 		.route("/api/svg/{id}", get(repo::get_svg).delete(repo::delete_svg))
 		.route("/api/svg/search", get(repo::search_svgs))

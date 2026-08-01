@@ -61,7 +61,7 @@ impl TemplateRegistry {
         }
     }
 
-    pub fn load_from_dir(path: &Path) -> Result<Vec<Template>> {
+    pub async fn load_from_dir(path: &Path) -> Result<Vec<Template>> {
         let mut templates = Vec::new();
 
         if !path.exists() {
@@ -69,20 +69,27 @@ impl TemplateRegistry {
         }
 
         let pattern = path.join("*.toml");
-        let pattern_str = pattern.to_string_lossy();
+        let pattern_str = pattern.to_string_lossy().into_owned();
 
-        for entry in glob::glob(&pattern_str).map_err(|e| AitmeowError::Template(e.to_string()))? {
-            let entry = entry.map_err(|e| AitmeowError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            )))?;
+        // glob 本身是同步 I/O，包进 spawn_blocking 避免阻塞 tokio runtime
+        let entries: Vec<std::path::PathBuf> =
+            tokio::task::spawn_blocking(move || -> Result<Vec<std::path::PathBuf>> {
+                let mut out = Vec::new();
+                for entry in glob::glob(&pattern_str).map_err(|e| AitmeowError::Template(e.to_string()))? {
+                    let entry = entry.map_err(|e| {
+                        AitmeowError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    })?;
+                    out.push(entry);
+                }
+                Ok(out)
+            })
+            .await
+            .map_err(|e| AitmeowError::Template(format!("glob join error: {}", e)))??;
 
-            let content =
-                std::fs::read_to_string(&entry).map_err(|e| AitmeowError::Template(format!(
-                    "Failed to read {}: {}",
-                    entry.display(),
-                    e
-                )))?;
+        for entry in entries {
+            let content = tokio::fs::read_to_string(&entry)
+                .await
+                .map_err(|e| AitmeowError::Template(format!("Failed to read {}: {}", entry.display(), e)))?;
 
             let mut template: Template =
                 toml::from_str(&content).map_err(|e| AitmeowError::Template(format!(

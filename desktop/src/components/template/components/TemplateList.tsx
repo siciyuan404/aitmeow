@@ -1,5 +1,6 @@
 import type { TemplateDefinition } from '@/types/template';
 import { getCategoryIcon, getCategoryGradient } from '../utils/templateUtils';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 interface TemplateListProps {
   templates: TemplateDefinition[];
@@ -7,6 +8,7 @@ interface TemplateListProps {
   onSelect?: (template: TemplateDefinition) => void;
   onEdit?: (template: TemplateDefinition) => void;
   onDelete?: (template: TemplateDefinition) => void;
+  onContextMenu?: (event: ReactMouseEvent, template: TemplateDefinition) => void;
 }
 
 export default function TemplateList({
@@ -15,6 +17,7 @@ export default function TemplateList({
   onSelect,
   onEdit,
   onDelete,
+  onContextMenu,
 }: TemplateListProps) {
   if (templates.length === 0) {
     return (
@@ -40,6 +43,7 @@ export default function TemplateList({
             }
           `}
           onClick={() => onSelect?.(template)}
+          onContextMenu={(event) => onContextMenu?.(event, template)}
         >
           {/* Icon */}
           <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getCategoryGradient(template.category)} flex items-center justify-center text-xl shrink-0`}>

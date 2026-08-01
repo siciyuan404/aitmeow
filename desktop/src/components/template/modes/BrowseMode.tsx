@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { useTemplateStore } from '@/stores/templateStore';
 import TemplateSearch from '../components/TemplateSearch';
 import CategorySidebar from '../components/CategorySidebar';
@@ -6,6 +6,7 @@ import TemplateGrid from '../components/TemplateGrid';
 import TemplateList from '../components/TemplateList';
 import TemplateContextMenu from '../components/TemplateContextMenu';
 import type { TemplateDefinition } from '@/types/template';
+import { toast } from 'sonner';
 
 export default function BrowseMode() {
   const templates = useTemplateStore(s => s.templates);
@@ -15,6 +16,8 @@ export default function BrowseMode() {
   const categoryFilter = useTemplateStore(s => s.categoryFilter);
   const sortBy = useTemplateStore(s => s.sortBy);
   const setSortBy = useTemplateStore(s => s.setSortBy);
+  const startEdit = useTemplateStore(s => s.startEdit);
+  const deleteTemplate = useTemplateStore(s => s.deleteTemplate);
 
   const [contextMenu, setContextMenu] = useState<{
     template: TemplateDefinition;
@@ -58,9 +61,27 @@ export default function BrowseMode() {
     return sorted;
   }, [templates, searchQuery, categoryFilter, sortBy]);
 
-  const handleContextMenu = (e: React.MouseEvent, template: TemplateDefinition) => {
+  const handleContextMenu = (e: ReactMouseEvent, template: TemplateDefinition) => {
     e.preventDefault();
+    e.stopPropagation();
     setContextMenu({ template, x: e.clientX, y: e.clientY });
+  };
+
+  const handleEdit = (template: TemplateDefinition) => {
+    setContextMenu(null);
+    startEdit(template);
+  };
+
+  const handleDelete = async (template: TemplateDefinition) => {
+    setContextMenu(null);
+    if (!confirm(`确定要删除模板 "${template.name}" 吗？`)) return;
+
+    try {
+      await deleteTemplate(template.name);
+      toast.success('模板已删除');
+    } catch (error: any) {
+      toast.error(error.message || '删除失败');
+    }
   };
 
   return (
@@ -117,15 +138,16 @@ export default function BrowseMode() {
           {viewMode === 'grid' ? (
             <TemplateGrid
               templates={filteredTemplates}
-              onEdit={(t) => console.log('Edit', t)}
-              onDelete={(t) => console.log('Delete', t)}
-              onCopy={(t) => console.log('Copy', t)}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onContextMenu={handleContextMenu}
             />
           ) : (
             <TemplateList
               templates={filteredTemplates}
-              onEdit={(t) => console.log('Edit', t)}
-              onDelete={(t) => console.log('Delete', t)}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onContextMenu={handleContextMenu}
             />
           )}
         </div>
@@ -138,11 +160,8 @@ export default function BrowseMode() {
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
-          onEdit={() => console.log('Edit', contextMenu.template)}
-          onCopy={() => console.log('Copy', contextMenu.template)}
-          onDelete={() => console.log('Delete', contextMenu.template)}
-          onExport={() => console.log('Export', contextMenu.template)}
-          onSetReference={() => console.log('Set reference', contextMenu.template)}
+          onEdit={() => handleEdit(contextMenu.template)}
+          onDelete={() => handleDelete(contextMenu.template)}
         />
       )}
     </div>

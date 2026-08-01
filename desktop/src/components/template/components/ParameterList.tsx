@@ -20,12 +20,16 @@ export default function ParameterList({ options, onChange }: ParameterListProps)
     };
 
     // Add type-specific defaults
-    if (newParamType === 'select') {
+    if (newParamType === 'select' || newParamType === 'multiselect') {
       newOption.options = ['选项1', '选项2', '选项3'];
     } else if (newParamType === 'range') {
       newOption.min = 1;
       newOption.max = 10;
       newOption.step = 1;
+    } else if (newParamType === 'number') {
+      newOption.step = 1;
+    } else if (newParamType === 'textarea') {
+      newOption.rows = 4;
     } else if (newParamType === 'color') {
       newOption.default = '#000000';
     }
@@ -94,7 +98,79 @@ export default function ParameterList({ options, onChange }: ParameterListProps)
                 </svg>
                 <div className="text-left">
                   <div className="text-sm font-medium">文本</div>
-                  <div className="text-xs opacity-75">自由文本输入</div>
+                  <div className="text-xs opacity-75">单行文本输入</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewParamType('textarea')}
+                className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  newParamType === 'textarea'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10M4 18h10" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-sm font-medium">多行文本</div>
+                  <div className="text-xs opacity-75">多行文本输入</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewParamType('number')}
+                className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  newParamType === 'number'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-sm font-medium">数字</div>
+                  <div className="text-xs opacity-75">数字输入框</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewParamType('range')}
+                className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  newParamType === 'range'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-sm font-medium">范围</div>
+                  <div className="text-xs opacity-75">滑块选择器</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewParamType('boolean')}
+                className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  newParamType === 'boolean'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-sm font-medium">开关</div>
+                  <div className="text-xs opacity-75">布尔值 true/false</div>
                 </div>
               </button>
 
@@ -129,26 +205,26 @@ export default function ParameterList({ options, onChange }: ParameterListProps)
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
                 <div className="text-left">
-                  <div className="text-sm font-medium">选择</div>
-                  <div className="text-xs opacity-75">下拉选择器</div>
+                  <div className="text-sm font-medium">单选</div>
+                  <div className="text-xs opacity-75">下拉单选</div>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => setNewParamType('range')}
+                onClick={() => setNewParamType('multiselect')}
                 className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                  newParamType === 'range'
+                  newParamType === 'multiselect'
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 }`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
                 <div className="text-left">
-                  <div className="text-sm font-medium">范围</div>
-                  <div className="text-xs opacity-75">滑块选择器</div>
+                  <div className="text-sm font-medium">多选</div>
+                  <div className="text-xs opacity-75">多选标签</div>
                 </div>
               </button>
             </div>
@@ -174,7 +250,7 @@ export default function ParameterList({ options, onChange }: ParameterListProps)
       )}
 
       {/* Parameters List */}
-      <OptionEditor options={options} onChange={onChange} />
+      <OptionEditor options={options} onChange={onChange} showAddButton={false} />
     </div>
   );
 }
@@ -182,9 +258,13 @@ export default function ParameterList({ options, onChange }: ParameterListProps)
 function getDefaultValueForType(type: TemplateOption['type']): string {
   const defaults: Record<TemplateOption['type'], string> = {
     text: '',
+    textarea: '',
+    number: '0',
+    range: '5',
+    boolean: 'false',
     color: '#000000',
     select: '',
-    range: '5',
+    multiselect: '',
   };
   return defaults[type] || '';
 }

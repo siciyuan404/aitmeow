@@ -70,76 +70,41 @@ jobs:
 
       - name: Package Windows desktop app
         working-directory: desktop
-        run: |
-          npx -y @electron/packager@latest . AitMeow `
-            --platform=win32 `
-            --arch=x64 `
-            --out=../release `
-            --overwrite `
-            --icon=resources/icon.ico `
-            --extra-resource=../target/release/aitmeow-server.exe `
-            --extra-resource=resources/icon.ico `
-            --extra-resource=resources/icon.png
+        run: npx electron-builder --win nsis --publish never
 
       - name: Verify desktop package
         run: |
-          $appDir = "release/AitMeow-win32-x64"
-          $required = @(
-            "$appDir/AitMeow.exe",
-            "$appDir/resources/aitmeow-server.exe"
-          )
-
-          foreach ($path in $required) {
-            if (!(Test-Path -LiteralPath $path)) {
-              throw "Missing packaged file: $path"
-            }
+          $installer = Get-ChildItem "release" -Filter "AitMeow-Setup-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (!$installer) {
+            throw "NSIS installer not found in release/"
           }
+          Write-Host "Found installer: $($installer.FullName) ($([math]::Round($installer.Length / 1MB, 1)) MB)"
 
-          $asarPath = "$appDir/resources/app.asar"
-          $unpackedAppFiles = @(
-            "$appDir/resources/app/dist/index.html",
-            "$appDir/resources/app/dist-electron/main.js"
-          )
-
-          $hasUnpackedApp = $true
-          foreach ($path in $unpackedAppFiles) {
-            if (!(Test-Path -LiteralPath $path)) {
-              $hasUnpackedApp = $false
-              break
-            }
+          if (!(Test-Path -LiteralPath "release/latest.yml")) {
+            throw "Missing latest.yml update manifest"
           }
-
-          if (!(Test-Path -LiteralPath $asarPath) -and !$hasUnpackedApp) {
-            throw "Missing packaged Electron app: expected app.asar or resources/app"
-          }
-
-      - name: Archive desktop package
-        run: |
-          $zipPath = "release/AitMeow-win32-x64.zip"
-          if (Test-Path -LiteralPath $zipPath) {
-            Remove-Item -LiteralPath $zipPath -Force
-          }
-          Compress-Archive -LiteralPath "release/AitMeow-win32-x64" -DestinationPath $zipPath
 
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
           name: AitMeow-win32-x64
-          path: release/AitMeow-win32-x64.zip
+          path: |
+            release/AitMeow-Setup-*.exe
+            release/latest.yml
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload GitHub release asset
+      - name: Upload GitHub release assets
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
-          $asset = "release/AitMeow-win32-x64.zip"
+          $installer = (Get-ChildItem "release" -Filter "AitMeow-Setup-*.exe" | Select-Object -First 1).FullName
 
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --title "AitMeow $tag" --generate-notes
           }
 
-          gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag $installer "release/latest.yml" --repo $env:GITHUB_REPOSITORY --clobber

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import type { TemplateDefinition, TemplateOption } from '@/types/template';
+import ParameterList from './components/ParameterList';
 
 interface TemplateEditorProps {
   template?: TemplateDefinition | null;
@@ -16,8 +17,8 @@ export default function TemplateEditor({ template, onSave, onCancel }: TemplateE
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: FormEvent | ReactMouseEvent<HTMLButtonElement>) => {
+    e?.preventDefault();
     setError(null);
     setSaving(true);
 
@@ -129,6 +130,11 @@ export default function TemplateEditor({ template, onSave, onCancel }: TemplateE
             <p className="text-xs text-slate-500 mt-1">
               使用 {`{{key}}`} 语法引用下方定义的参数
             </p>
+          </div>
+
+          {/* Parameters */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4">
+            <ParameterList options={options} onChange={setOptions} />
           </div>
         </form>
 

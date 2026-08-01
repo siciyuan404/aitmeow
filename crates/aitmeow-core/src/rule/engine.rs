@@ -46,7 +46,9 @@ impl Rule {
             }
             Rule::ColorPalette(colors) => {
                 let allowed: Vec<String> = colors.iter().map(|c| c.to_lowercase()).collect();
-                for cap in COLOR_HEX_RE.find_iter(svg) {
+                let re = regex::Regex::new(r"#[0-9a-fA-F]{3,8}")
+                    .map_err(|e| format!("Invalid color regex: {}", e))?;
+                for cap in re.find_iter(svg) {
                     let hex = cap.as_str().to_lowercase();
                     if !allowed.contains(&hex) {
                         return Err(format!(
@@ -83,11 +85,6 @@ impl RuleEngine {
         }
     }
 }
-
-use once_cell::sync::Lazy;
-use regex::Regex;
-
-static COLOR_HEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#[0-9a-fA-F]{3,8}").unwrap());
 
 #[cfg(test)]
 mod tests {

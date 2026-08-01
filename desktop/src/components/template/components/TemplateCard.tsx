@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { TemplateDefinition } from '@/types/template';
 import { getCategoryIcon, getCategoryGradient } from '../utils/templateUtils';
 
@@ -9,6 +9,7 @@ interface TemplateCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onCopy?: () => void;
+  onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
 export default function TemplateCard({
@@ -18,6 +19,7 @@ export default function TemplateCard({
   onEdit,
   onDelete,
   onCopy,
+  onContextMenu,
 }: TemplateCardProps) {
   const [hover, setHover] = useState(false);
 
@@ -31,6 +33,7 @@ export default function TemplateCard({
         }
       `}
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >

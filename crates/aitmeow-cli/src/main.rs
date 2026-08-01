@@ -170,7 +170,7 @@ async fn cmd_validate(path: PathBuf, rule_names: Option<Vec<String>>) -> aitmeow
     };
 
     let result = aitmeow_core::svg::validate_svg(&svg, &rules)?;
-    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+    print_json(&result)?;
 
     if !result.valid {
         std::process::exit(1);
@@ -301,7 +301,7 @@ async fn cmd_template_list(category: Option<String>) -> aitmeow_core::error::Res
     let config = aitmeow_core::config::Config::load();
     let mut registry = aitmeow_core::template::TemplateRegistry::new();
     for dir in &config.template_dirs {
-        let tmpls = aitmeow_core::template::TemplateRegistry::load_from_dir(dir)?;
+        let tmpls = aitmeow_core::template::TemplateRegistry::load_from_dir(dir).await?;
         registry.register(tmpls);
     }
 
@@ -325,12 +325,12 @@ async fn cmd_template_get(name: String) -> aitmeow_core::error::Result<()> {
     let config = aitmeow_core::config::Config::load();
     let mut registry = aitmeow_core::template::TemplateRegistry::new();
     for dir in &config.template_dirs {
-        let tmpls = aitmeow_core::template::TemplateRegistry::load_from_dir(dir)?;
+        let tmpls = aitmeow_core::template::TemplateRegistry::load_from_dir(dir).await?;
         registry.register(tmpls);
     }
 
     match registry.get(&name) {
-        Some(t) => println!("{}", serde_json::to_string_pretty(t).unwrap()),
+        Some(t) => print_json(t)?,
         None => {
             eprintln!("Template not found: {}", name);
             std::process::exit(1);
@@ -351,5 +351,13 @@ async fn cmd_health() -> aitmeow_core::error::Result<()> {
     let port_ok = aitmeow_server::check_port(config.port).await.is_ok();
     println!("Port {}: {}", config.port, if port_ok { "available" } else { "in use" });
 
+    Ok(())
+}
+
+/// 把任意可序列化值以 pretty JSON 输出到 stdout，序列化失败转为 AitmeowError。
+fn print_json<T: serde::Serialize>(value: &T) -> aitmeow_core::error::Result<()> {
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|e| aitmeow_core::error::AitmeowError::Serialize(e.to_string()))?;
+    println!("{}", json);
     Ok(())
 }

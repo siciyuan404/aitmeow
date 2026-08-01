@@ -25,6 +25,9 @@ pub enum AitmeowError {
 
     #[error("Not found: {0}")]
     NotFound(String),
+
+    #[error("Serialization error: {0}")]
+    Serialize(String),
 }
 
 pub type Result<T> = std::result::Result<T, AitmeowError>;
