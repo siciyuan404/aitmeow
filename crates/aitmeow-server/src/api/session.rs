@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
 use crate::session::{GenerationResult, ReferenceSvg, SessionEvent};
+use aitmeow_core::iconspec::ReferenceItem;
 use axum::{
     extract::State,
     http::StatusCode,
@@ -71,6 +72,7 @@ pub async fn get_state(
         "active_rules": session.active_rules,
         "compiled_prompt": compiled_prompt,
         "reference_svg": session.reference_svg,
+        "reference_items": session.reference_items,
         "pending_svg": session.pending_svg,
         "pending_generation": session.pending_generation,
         "has_reference_image": has_reference_image,
@@ -122,6 +124,60 @@ pub async fn set_reference(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let mut session = state.session.write().await;
     session.reference_svg = req.reference_svg;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetReferencesRequest {
+    pub items: Vec<ReferenceItem>,
+}
+
+/// 整体替换参考元素列表。前端拖拽是「加一个」，由前端先读再写回。
+pub async fn set_references(
+    State(state): State<AppState>,
+    Json(req): Json<SetReferencesRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let mut session = state.session.write().await;
+    session.reference_items = req
+        .items
+        .into_iter()
+        .filter(|i| !i.name.trim().is_empty())
+        .collect();
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "count": session.reference_items.len(),
+    })))
+}
+
+pub async fn get_references(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let session = state.session.read().await;
+    Ok(Json(serde_json::json!({ "items": session.reference_items })))
+}
+
+/// 追加一个参考元素，重名会覆盖已有的那条。
+pub async fn add_reference(
+    State(state): State<AppState>,
+    Json(item): Json<ReferenceItem>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if item.name.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut session = state.session.write().await;
+    session.reference_items.retain(|i| i.name != item.name);
+    session.reference_items.push(item);
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "count": session.reference_items.len(),
+    })))
+}
+
+pub async fn clear_references(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let mut session = state.session.write().await;
+    session.reference_items.clear();
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

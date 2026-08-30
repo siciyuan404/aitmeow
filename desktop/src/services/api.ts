@@ -28,6 +28,130 @@ export interface SvgRecord {
   thumbnail: string | null;
   created_at: string;
   updated_at: string;
+  collection_id?: string | null;
+  frame_index?: number | null;
+  record_type?: 'result' | 'asset';
+  preset?: IconSpec | null;
+}
+
+// ────────────────────────── Icon Studio 设定 ──────────────────────────
+
+export type IconShapeKind =
+  | 'square'
+  | 'rounded_square'
+  | 'circle'
+  | 'hexagon'
+  | 'octagon'
+  | 'diamond'
+  | 'free';
+
+export interface IconShape {
+  kind: IconShapeKind;
+  radius?: number;
+}
+
+export interface AspectRatio {
+  w: number;
+  h: number;
+}
+
+export type StrokeAlign = 'inside' | 'center' | 'outside';
+export type LineCap = 'butt' | 'round' | 'square';
+export type LineJoin = 'miter' | 'round' | 'bevel';
+
+export interface StrokeSpec {
+  kind: 'none' | 'line';
+  color?: string;
+  width?: number;
+  dash?: number;
+  gap?: number;
+  dotted?: boolean;
+  double?: boolean;
+  align?: StrokeAlign;
+  cap?: LineCap;
+  join?: LineJoin;
+}
+
+export interface BackgroundSpec {
+  kind: 'transparent' | 'solid' | 'linear_gradient';
+  color?: string;
+  from?: string;
+  to?: string;
+  angle?: number;
+}
+
+export type ColorMode = 'full_color' | 'monochrome' | 'duotone' | 'outline' | 'flat' | 'gradient';
+export type IconStyle = 'flat' | 'line' | 'filled' | 'duotone' | 'hand_drawn' | 'pixel' | 'gradient' | 'three_d' | 'glass';
+export type StrokeWeight = 'hairline' | 'thin' | 'regular' | 'bold' | 'black';
+export type DetailLevel = 'minimal' | 'balanced' | 'detailed';
+export type GridSnap = 'off' | 'pt2' | 'pt4' | 'pt8';
+
+export interface PaletteSpec {
+  mode: ColorMode;
+  primary?: string | null;
+  secondary?: string | null;
+}
+
+export interface StyleSpec {
+  style: IconStyle;
+  weight: StrokeWeight;
+  detail: DetailLevel;
+  grid: GridSnap;
+}
+
+export interface AnimationSpec {
+  enabled: boolean;
+  frames: number;
+}
+
+export interface IconSpec {
+  shape: IconShape;
+  rotation: number;
+  aspect: AspectRatio;
+  base_size: number;
+  inset: number;
+  safe_area: number;
+  overshoot: number;
+  optical_shift: number;
+  stroke: StrokeSpec;
+  background: BackgroundSpec;
+  palette: PaletteSpec;
+  style: StyleSpec;
+  allow_text: boolean;
+  animation: AnimationSpec;
+}
+
+export interface ReferenceItem {
+  name: string;
+  hint?: string | null;
+}
+
+export type CollectionKind = 'batch' | 'frameset' | 'manual';
+
+export interface CollectionSummary {
+  id: string;
+  name: string;
+  kind: CollectionKind;
+  tags: string[];
+  preset?: IconSpec | null;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+}
+
+export interface Collection extends CollectionSummary {}
+
+export interface BatchSaveItem {
+  name: string;
+  svg_content: string;
+  frame_index?: number | null;
+  tags?: string[];
+}
+
+export interface BatchSaveResponse {
+  collection: CollectionSummary;
+  saved: number;
+  failed: string[];
 }
 
 export interface SvgListResponse {
@@ -128,13 +252,16 @@ export const api = {
       body: JSON.stringify({ svg, ...opts }),
     }),
 
-  listSvgs: (params?: { offset?: number; limit?: number; sort_by?: string; sort_order?: string; tag?: string }) => {
+  listSvgs: (params?: { offset?: number; limit?: number; sort_by?: string; sort_order?: string; tag?: string; collection_id?: string; record_type?: string; uncollected?: boolean }) => {
     const qs = new URLSearchParams();
     if (params?.offset !== undefined) qs.set('offset', String(params.offset));
     if (params?.limit !== undefined) qs.set('limit', String(params.limit));
     if (params?.sort_by) qs.set('sort_by', params.sort_by);
     if (params?.sort_order) qs.set('sort_order', params.sort_order);
     if (params?.tag) qs.set('tag', params.tag);
+    if (params?.collection_id) qs.set('collection_id', params.collection_id);
+    if (params?.record_type) qs.set('record_type', params.record_type);
+    if (params?.uncollected) qs.set('uncollected', 'true');
     return request<SvgListResponse>(`/api/svg?${qs.toString()}`);
   },
 
@@ -146,6 +273,10 @@ export const api = {
     params?: Record<string, string>;
     width?: number;
     height?: number;
+    collection_id?: string;
+    frame_index?: number;
+    record_type?: string;
+    preset?: IconSpec;
   }) =>
     request<SvgRecord>('/api/svg', {
       method: 'POST',
@@ -206,4 +337,81 @@ export const api = {
     request<{ deleted: boolean }>(`/api/template/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     }),
+
+  // ────────────────── Icon Studio ──────────────────
+
+  iconApply: (svg: string, spec: IconSpec) =>
+    request<{ svg: string; bytes: number }>('/api/icon/apply', {
+      method: 'POST',
+      body: JSON.stringify({ svg, spec }),
+    }),
+
+  iconPrompt: (data: { user_prompt: string; spec: IconSpec; refs?: ReferenceItem[]; frame?: [number, number] }) =>
+    request<{ prompt: string }>('/api/icon/prompt', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, refs: data.refs || [] }),
+    }),
+
+  batchSave: (data: {
+    collection_name: string;
+    kind?: string;
+    tags?: string[];
+    apply?: boolean;
+    spec: IconSpec;
+    items: BatchSaveItem[];
+  }) =>
+    request<BatchSaveResponse>('/api/icon/batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // ────────────────── Collections ──────────────────
+
+  listCollections: () => request<CollectionSummary[]>('/api/collections'),
+
+  createCollection: (data: { name: string; kind?: string; tags?: string[]; preset?: IconSpec }) =>
+    request<Collection>('/api/collections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getCollection: (id: string) => request<Collection>(`/api/collections/${encodeURIComponent(id)}`),
+
+  updateCollection: (id: string, data: { name?: string; tags?: string[]; preset?: IconSpec }) =>
+    request<Collection>(`/api/collections/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteCollection: (id: string) =>
+    request<{ deleted: boolean; items_unbound: boolean }>(`/api/collections/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  listCollectionItems: (id: string) =>
+    request<{ items: SvgRecord[]; total: number }>(`/api/collections/${encodeURIComponent(id)}/items`),
+
+  addCollectionItems: (id: string, ids: string[]) =>
+    request<{ assigned: number }>(`/api/collections/${encodeURIComponent(id)}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+
+  // ────────────────── References (multi) ──────────────────
+
+  getReferences: () => request<{ items: ReferenceItem[] }>('/api/session/references'),
+
+  setReferences: (items: ReferenceItem[]) =>
+    request<{ ok: true; count: number }>('/api/session/references', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  addReference: (item: ReferenceItem) =>
+    request<{ ok: true; count: number }>('/api/session/references/add', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    }),
+
+  clearReferences: () => request<{ ok: true }>('/api/session/references', { method: 'DELETE' }),
 };

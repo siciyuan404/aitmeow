@@ -2,12 +2,18 @@ import CircleIcon from './CircleIcon';
 import HexagonIcon from './HexagonIcon';
 import DiamondIcon from './DiamondIcon';
 import SquareIcon from './SquareIcon';
+import OctagonIcon from './OctagonIcon';
+import RoundedSquareIcon from './RoundedSquareIcon';
+import FreeIcon from './FreeIcon';
 
 const shapeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   circle: CircleIcon,
   hexagon: HexagonIcon,
   diamond: DiamondIcon,
   square: SquareIcon,
+  octagon: OctagonIcon,
+  rounded_square: RoundedSquareIcon,
+  free: FreeIcon,
 };
 
 function getIconForValue(value: string) {

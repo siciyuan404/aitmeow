@@ -1,3 +1,4 @@
+use aitmeow_core::iconspec::ReferenceItem;
 use serde::Serialize;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
@@ -53,6 +54,11 @@ pub struct SessionState {
     pub pending_generation: Option<GenerationResult>,
     /// 用户从仓库中选择的参考 SVG（Agent 可参考该图生成）
     pub reference_svg: Option<ReferenceSvg>,
+    /// 用户拖进设定面板的多个参考元素，图标生成时全部编进 prompt。
+    ///
+    /// 和 `reference_svg` 是两套：那个是模板体系的单张参考图，
+    /// 这个是 Icon Studio 的多参考元素，别互相覆盖。
+    pub reference_items: Vec<ReferenceItem>,
     /// 用户上传的参考图片（PNG 原始字节），用于像素模板的 ImageReference 参数
     pub reference_image: Option<Vec<u8>>,
     /// 广播通道 —— WS 连接通过订阅此通道接收实时推送
@@ -69,6 +75,7 @@ impl SessionState {
             pending_svg: None,
             pending_generation: None,
             reference_svg: None,
+            reference_items: Vec::new(),
             reference_image: None,
             tx,
         }

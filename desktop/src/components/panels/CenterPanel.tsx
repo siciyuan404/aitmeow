@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { api, type ValidationResponse } from '@/services/api';
 import { wsClient } from '@/services/ws';
 import HistoryThumbnails from './HistoryThumbnails';
+import ResultTray from '@/components/iconspec/ResultTray';
+import { useIconStudioStore } from '@/stores/iconStudioStore';
 
 interface CenterPanelProps {
   templateParams: Record<string, string>;
@@ -35,6 +37,20 @@ export default function CenterPanel({
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const studioEnabled = useIconStudioStore((s) => s.enabled);
+  const studioSpec = useIconStudioStore((s) => s.spec);
+  const addTrayItem = useIconStudioStore((s) => s.addTrayItem);
+  const addFrameItem = useIconStudioStore((s) => s.addFrameItem);
+  const frameMode = useIconStudioStore((s) => s.frameMode);
+  const startFrameSession = useIconStudioStore((s) => s.startFrameSession);
+  const [iconUserPrompt, setIconUserPrompt] = useState('');
+  const studioEnabledRef = useRef(studioEnabled);
+  const studioSpecRef = useRef(studioSpec);
+  const addFrameRef = useRef(addFrameItem);
+  studioEnabledRef.current = studioEnabled;
+  studioSpecRef.current = studioSpec;
+  addFrameRef.current = addFrameItem;
+
   const ruleNames = useCallback(() => {
     const map: Record<string, string> = { max_size: 'max_size', viewbox: 'viewbox', require_ids: 'require_ids' };
     return Array.from(activeRules).map((r) => map[r] || r).filter(Boolean);
@@ -61,6 +77,18 @@ export default function CenterPanel({
         setViewMode('svg');
         setWorkspaceMode('board');
       });
+
+      // 图标工作室模式：自动套蒙版并塞进当前批次托盘
+      if (studioEnabledRef.current && studioSpecRef.current) {
+        api.iconApply(svg, studioSpecRef.current)
+          .then((r) => {
+            addFrameRef.current({
+              name: data?.name || `图标 ${new Date().toLocaleTimeString()}`,
+              svg_content: r.svg,
+            });
+          })
+          .catch((err: Error) => console.warn('套蒙版失败:', err.message));
+      }
 
       // 非轮询触发的才弹 toast（WS 推送）
       if (!data?._poll) {
@@ -172,6 +200,42 @@ export default function CenterPanel({
     toast.success(`已载入「${name}」`);
   };
 
+  // 把当前预览 SVG 套上设定并塞进托盘
+  const handleAddToTray = async () => {
+    if (!svgInput.trim()) return toast.error('没有可加入批次的内容');
+    try {
+      const r = await api.iconApply(svgInput, studioSpec);
+      addTrayItem({
+        key: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: `图标 ${new Date().toLocaleTimeString()}`,
+        svg_content: r.svg,
+      });
+      toast.success('已加入当前批次');
+    } catch (e: any) { toast.error('套蒙版失败: ' + (e.message || e)); }
+  };
+
+  // 编译当前图标的生成 prompt（供 Agent 参考）。动画开启时逐帧编译。
+  const handleCompileIconPrompt = async () => {
+    if (!iconUserPrompt.trim()) return toast.error('请先填写生成需求');
+    try {
+      const total = studioSpec.animation.enabled ? studioSpec.animation.frames : 1;
+      if (total > 1) {
+        const prompts: string[] = [];
+        for (let i = 0; i < total; i++) {
+          const r = await api.iconPrompt({ user_prompt: iconUserPrompt, spec: studioSpec, refs: [], frame: [i, total] });
+          prompts.push(`═══ 第 ${i + 1}/${total} 帧 ═══\n${r.prompt}`);
+        }
+        setIconPromptPreview(prompts.join('\n\n'));
+        startFrameSession();
+        toast.success(`已生成 ${total} 帧的 prompt，进入帧序列录制`);
+      } else {
+        const r = await api.iconPrompt({ user_prompt: iconUserPrompt, spec: studioSpec, refs: [] });
+        setIconPromptPreview(r.prompt);
+      }
+    } catch (e: any) { toast.error('编译 prompt 失败: ' + (e.message || e)); }
+  };
+  const [iconPromptPreview, setIconPromptPreview] = useState<string | null>(null);
+
   return (
     <section className="flex-1 p-4 flex overflow-hidden min-w-[400px]">
       <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col flex-1 min-h-0 shadow-sm">
@@ -238,6 +302,54 @@ export default function CenterPanel({
         )}
 
         <HistoryThumbnails refreshKey={historyRefreshKey} onSelect={handleSelectHistory} />
+
+        {studioEnabled && (
+          <div className="mt-3 shrink-0 flex items-center gap-2">
+            <input
+              type="text"
+              value={iconUserPrompt}
+              onChange={(e) => setIconUserPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCompileIconPrompt()}
+              placeholder="描述要生成的图标…（Enter 编译 prompt）"
+              className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-700 outline-none focus:border-blue-400 placeholder:text-slate-400"
+            />
+            <button onClick={handleCompileIconPrompt}
+              className="shrink-0 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-50">
+              编译 prompt
+            </button>
+            {studioSpec.animation.enabled && (
+              <button onClick={startFrameSession}
+                className={`shrink-0 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                  frameMode ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50'
+                }`}>
+                {frameMode ? `帧序列录制中…` : `开始帧序列 (${studioSpec.animation.frames})`}
+              </button>
+            )}
+            <button onClick={handleAddToTray} disabled={!svgInput}
+              className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-40">
+              + 加入批次
+            </button>
+          </div>
+        )}
+
+        {iconPromptPreview && (
+          <div className="mt-3 shrink-0 rounded-xl border border-violet-200 bg-violet-50/40">
+            <div className="flex items-center justify-between border-b border-violet-200/70 px-3 py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600">生成 prompt</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => navigator.clipboard.writeText(iconPromptPreview)}
+                  className="text-[10px] text-violet-600 hover:text-violet-800 transition-colors px-1">复制</button>
+                <button onClick={() => setIconPromptPreview(null)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-0.5">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+            <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-[10px] leading-5 text-slate-700">{iconPromptPreview}</pre>
+          </div>
+        )}
+
+        <ResultTray onSaved={() => setHistoryRefreshKey((k) => k + 1)} />
 
         {validation && (
           <div className={`mt-3 shrink-0 rounded-xl p-2.5 px-3 border text-xs ${validation.valid ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>

@@ -1,4 +1,4 @@
-use crate::api::{health, repo, session as session_api, svg, template};
+use crate::api::{collections, health, icon, repo, session as session_api, svg, template};
 use crate::app_state::AppState;
 use crate::mcp::McpRouter;
 use axum::{
@@ -27,9 +27,30 @@ pub fn create_router(state: AppState) -> Router {
 			get(template::get_template)
 			.put(template::update_template)
 			.delete(template::delete_template))
+		.route("/api/icon/apply", post(icon::apply))
+		.route("/api/icon/prompt", post(icon::prompt))
+		.route("/api/icon/batch", post(icon::batch_save))
+		.route("/api/collections",
+			get(collections::list_collections)
+			.post(collections::create_collection))
+		.route("/api/collections/{id}",
+			get(collections::get_collection)
+			.patch(collections::update_collection)
+			.delete(collections::delete_collection))
+		.route("/api/collections/{id}/items",
+			get(collections::list_collection_items)
+			.post(collections::add_items))
+		.route("/api/repository/info", get(collections::repository_info))
+		.route("/api/repository/export", get(collections::export_database))
+		.route("/api/repository/import", post(collections::import_database))
 		.route("/api/health", get(health::health))
 		.route("/api/session/state", get(session_api::get_state).post(session_api::update_state))
 		.route("/api/session/reference", post(session_api::set_reference))
+		.route("/api/session/references",
+			get(session_api::get_references)
+			.post(session_api::set_references)
+			.delete(session_api::clear_references))
+		.route("/api/session/references/add", post(session_api::add_reference))
 		.route("/api/session/reference-image", post(session_api::set_reference_image))
 		.route("/ws/preview", get(crate::ws::ws_handler))
 		.route("/mcp", post(handle_mcp))

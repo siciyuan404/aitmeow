@@ -8,6 +8,8 @@ import RightPanel from '@/components/panels/RightPanel';
 import RuleBar from '@/components/panels/RuleBar';
 import SettingsDrawer from '@/components/panels/SettingsDrawer';
 import TemplatePanel from '@/components/template/TemplatePanel';
+import IconStudioPanel from '@/components/iconspec/IconStudioPanel';
+import { useIconStudioStore } from '@/stores/iconStudioStore';
 import UiLocatorOverlay from '@/components/dev/UiLocatorOverlay';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -127,7 +129,7 @@ export default function App() {
 
         <main className="flex-1 flex overflow-hidden min-h-0">
           {leftPanelOpen && (
-            <LeftPanel
+            <IconStudioPanel
               selectedTemplate={selectedTemplate}
               templateParams={templateParams}
               onSelectTemplate={setSelectedTemplate}

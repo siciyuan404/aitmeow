@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
-use aitmeow_core::repository::ListOptions;
+use aitmeow_core::iconspec::IconSpec;
+use aitmeow_core::repository::{ListOptions, RecordType};
 use aitmeow_core::repository::SvgRecord;
 use axum::{
     extract::{Path, Query, State},
@@ -21,6 +22,15 @@ pub struct ListQuery {
     pub sort_order: Option<String>,
     #[serde(default)]
     pub tag: Option<String>,
+    /// 只列某个集合内的条目
+    #[serde(default)]
+    pub collection_id: Option<String>,
+    /// `result`（成品）或 `asset`（素材），不传则两者都要
+    #[serde(default)]
+    pub record_type: Option<String>,
+    /// 只要未归入任何集合的条目
+    #[serde(default)]
+    pub uncollected: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +55,16 @@ pub struct SaveRequest {
     pub width: Option<u32>,
     #[serde(default)]
     pub height: Option<u32>,
+    #[serde(default)]
+    pub collection_id: Option<String>,
+    #[serde(default)]
+    pub frame_index: Option<u32>,
+    /// `result`（成品）或 `asset`（素材），缺省 `result`
+    #[serde(default)]
+    pub record_type: Option<String>,
+    /// 生成这份素材时的设定快照
+    #[serde(default)]
+    pub preset: Option<IconSpec>,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +84,9 @@ pub async fn list_svgs(
         sort_order: query.sort_order.unwrap_or_else(|| "desc".to_string()),
         tag: query.tag,
         category: None,
+        collection_id: query.collection_id,
+        record_type: query.record_type.as_deref().map(RecordType::parse),
+        uncollected: query.uncollected,
     };
 
     let items = state
@@ -71,9 +94,10 @@ pub async fn list_svgs(
         .list(&opts)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // 必须用同一份过滤条件统计，否则分页页数会算错
     let total = state
         .repository
-        .count()
+        .count_filtered(&opts)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -84,10 +108,23 @@ pub async fn save_svg(
     State(state): State<AppState>,
     Json(req): Json<SaveRequest>,
 ) -> Result<(StatusCode, Json<SvgRecord>), StatusCode> {
-    let record = SvgRecord::new(req.name, req.svg_content)
+    let mut record = SvgRecord::new(req.name, req.svg_content)
         .with_template(req.template_name.unwrap_or_default())
         .with_tags(req.tags)
-        .with_params(req.params);
+        .with_params(req.params)
+        .with_record_type(RecordType::parse(
+            req.record_type.as_deref().unwrap_or("result"),
+        ));
+
+    if let Some(id) = req.collection_id {
+        record = record.with_collection(id);
+    }
+    if let Some(idx) = req.frame_index {
+        record = record.with_frame(idx);
+    }
+    if let Some(preset) = req.preset {
+        record = record.with_preset(preset);
+    }
 
     let record = SvgRecord {
         width: req.width,
