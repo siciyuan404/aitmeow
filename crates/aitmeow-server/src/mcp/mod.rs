@@ -51,9 +51,19 @@ impl McpRouter {
 
         let result = session::publish_generation_internal(state, template_name, &params_map, svg_content).await;
 
+        // 没有桌面端连接时，说明推送无人接收 —— 让调用方（AI）能明确告知用户
+        let desktop_connected =
+            state.ws_connections.load(std::sync::atomic::Ordering::SeqCst) > 0;
+
         Ok(json!({
             "generation_id": result.id,
-            "status": "accepted"
+            "status": "accepted",
+            "desktop_connected": desktop_connected,
+            "hint": if desktop_connected {
+                "SVG 已推送到桌面端预览面板"
+            } else {
+                "桌面端未连接，SVG 已暂存（pending_generation）；请打开 aitmeow 桌面端后稍等几秒会自动载入"
+            }
         }))
     }
 

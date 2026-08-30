@@ -3,6 +3,7 @@ use aitmeow_core::config::Config;
 use aitmeow_core::repository::Repository;
 use aitmeow_core::rule::RuleEngine;
 use aitmeow_core::template::TemplateRegistry;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -13,6 +14,8 @@ pub struct AppState {
     pub rule_engine: Arc<RuleEngine>,
     pub config: Arc<Config>,
     pub session: Arc<RwLock<SessionState>>,
+    /// 当前连接的 WebSocket（桌面预览端）数量 —— MCP 用它判断推送有没有人接收
+    pub ws_connections: Arc<AtomicUsize>,
 }
 
 impl AppState {
@@ -35,6 +38,7 @@ impl AppState {
             rule_engine: Arc::new(rule_engine),
             config: Arc::new(config.clone()),
             session: Arc::new(RwLock::new(SessionState::new())),
+            ws_connections: Arc::new(AtomicUsize::new(0)),
         })
     }
 }

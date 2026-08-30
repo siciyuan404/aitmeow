@@ -51,6 +51,9 @@ let mainWindow: BrowserWindow | null = null;
 // 进度节流：最多每 100ms 发一次 live event
 let lastProgressEmit = 0;
 
+// 标记当前检查是否为后台静默检查 —— 静默失败不弹错误打扰用户
+let silentCheck = false;
+
 function emit(partial: Partial<UpdateState>): void {
   state = { ...state, ...partial, seq: state.seq + 1 };
   mainWindow?.webContents.send('update:state-changed', state);
@@ -86,10 +89,9 @@ function classifyError(err: unknown): string {
 }
 
 export function initUpdater(): void {
-  // 手动控制下载和安装，不由 autoUpdater 自动触发
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
-  // 开发模式下也允许检查（electron-updater 会读 dev-app-update.yml 或报错）
+  // 无感更新：后台自动下载，下次退出时自动安装，用户只在"新版本已就绪"这一刻被提示
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowDowngrade = false;
 
   autoUpdater.on('checking-for-update', () => {
@@ -164,11 +166,33 @@ export function initUpdater(): void {
   });
 
   autoUpdater.on('error', (err: Error) => {
+    // 后台静默检查失败不该打扰用户，静默回落到 idle；用户手动点检查时才展示错误
+    if (silentCheck) {
+      emit({ status: 'idle', error: undefined });
+      return;
+    }
     emit({
       status: 'error',
       error: classifyError(err),
     });
   });
+}
+
+/// 启动后延迟静默检查一次更新：有新版本就后台下载，没有或失败都不打扰用户
+export function checkForUpdatesInBackground(delayMs = 5000): void {
+  if (!app.isPackaged) return;
+
+  setTimeout(async () => {
+    if (state.status !== 'idle') return;
+    silentCheck = true;
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch {
+      emit({ status: 'idle', error: undefined });
+    } finally {
+      silentCheck = false;
+    }
+  }, delayMs);
 }
 
 export function registerUpdateHandlers(): void {
@@ -178,8 +202,8 @@ export function registerUpdateHandlers(): void {
     if (!app.isPackaged) {
       return { success: false, error: '开发环境不支持更新检查' };
     }
-    // 仅 Idle / NotAvailable / Error 状态允许重新检查
-    if (state.status !== 'idle' && state.status !== 'not-available' && state.status !== 'error') {
+    // 只在检查/下载进行中才拒绝，available / ready 允许重新检查（避免状态机卡死）
+    if (state.status === 'checking' || state.status === 'downloading') {
       return { success: false, error: '更新检查正在进行中' };
     }
     try {

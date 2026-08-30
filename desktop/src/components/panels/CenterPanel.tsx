@@ -71,8 +71,8 @@ export default function CenterPanel({
       api.updateSessionState({ clear_pending: true }).catch((err: Error) => console.warn('清除 pending_generation 失败:', err.message));
     }
 
-    // 1) 实时 WS 推送
-    const unsubscribe = wsClient.on('GenerationReady', (data: any) => {
+    // 1) 实时 WS 推送（服务端发出的 type 是 snake_case 的 generation_ready）
+    const unsubscribe = wsClient.on('generation_ready', (data: any) => {
       applyGeneration(data);
     });
 
@@ -86,12 +86,16 @@ export default function CenterPanel({
     };
     pollPending();
 
-    // 3) WS 重连后重新拉取（处理断连期间事件丢失的情况）
+    // 3) 兜底轮询：WS 断连、事件丢失、组件重挂载时仍能拿到推送内容
+    const pollTimer = setInterval(pollPending, 3000);
+
+    // 4) WS 重连后重新拉取（处理断连期间事件丢失的情况）
     const unsubConnected = wsClient.on('connected', pollPending);
 
     return () => {
       unsubscribe();
       unsubConnected();
+      clearInterval(pollTimer);
     };
   }, []);
 

@@ -6,6 +6,7 @@ use aitmeow_server::app_state::AppState;
 use aitmeow_server::session::SessionState;
 use aitmeow_server::mcp::McpRouter;
 use serde_json::json;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -20,6 +21,7 @@ async fn build_test_state() -> AppState {
         rule_engine: Arc::new(rule_engine),
         config: Arc::new(config),
         session: Arc::new(RwLock::new(SessionState::new())),
+        ws_connections: Arc::new(AtomicUsize::new(0)),
     }
 }
 
@@ -68,6 +70,14 @@ async fn test_mcp_svg_preview() {
     let inner: serde_json::Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(inner["status"], "accepted");
     assert!(inner["generation_id"].is_string());
+    // 测试环境没有桌面端在线，desktop_connected 应为 false（AI 据此提示"推送暂无人接收"）
+    assert_eq!(inner["desktop_connected"], false);
+    assert!(inner["hint"].is_string());
+
+    // 推送内容应落到 session，供桌面端（含轮询兜底）消费
+    let session = state.session.read().await;
+    let pending = session.pending_generation.as_ref().expect("pending_generation should be set");
+    assert!(pending.svg_content.contains("<svg"));
 }
 
 #[tokio::test]

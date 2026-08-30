@@ -66,8 +66,23 @@ class WebSocketClient {
   }
 
   private emit(event: string, data: unknown): void {
-    this.handlers.get(event)?.forEach((h) => h(data));
+    if (!event) return;
+    this.dispatch(event, data);
+    // 服务端事件名是 snake_case（serde rename_all），前端历史上按 PascalCase 订阅，
+    // 这里同时派发两种写法，避免改名导致监听永远收不到。
+    const pascal = toPascalCase(event);
+    if (pascal !== event) this.dispatch(pascal, data);
   }
+
+  private dispatch(event: string, data: unknown): void {
+    this.handlers.get(event)?.slice().forEach((h) => h(data));
+  }
+}
+
+function toPascalCase(value: string): string {
+  return value
+    .replace(/_([a-zA-Z0-9])/g, (_, c: string) => c.toUpperCase())
+    .replace(/^./, (c) => c.toUpperCase());
 }
 
 export const wsClient = new WebSocketClient();

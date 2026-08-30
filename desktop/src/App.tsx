@@ -31,6 +31,22 @@ export default function App() {
 
   useEffect(() => { loadSettings(); }, []);
 
+  // 全局订阅更新状态（后台自动检查/下载，这里只负责在顶栏给一个轻量提示）
+  const [updateState, setUpdateState] = useState<any>(null);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+
+    const apply = (next: any) => {
+      setUpdateState((prev: any) => (prev && prev.seq > next.seq ? prev : next));
+    };
+
+    const unsubscribe = api.onUpdateStateChanged(apply);
+    api.updateGetState().then(apply).catch(() => {});
+    return unsubscribe;
+  }, []);
+
   // 监听模板变更事件（MCP/REST 创建/更新/删除模板），实时刷新桌面端模板列表
   useEffect(() => {
     const unsubscribe = wsClient.on('TemplateChanged', (data: any) => {
@@ -105,6 +121,7 @@ export default function App() {
         <TopBar
           connected={connected}
           port={port}
+          updateState={updateState}
           onSettingsClick={() => setSettingsOpen(true)}
         />
 

@@ -65,21 +65,27 @@ Templates define SVG generation parameters in TOML format:
 
 ## MCP Integration
 
-Use with Claude Code or other MCP clients:
+MCP 走 HTTP（Streamable HTTP 的简化版：POST JSON-RPC），**不支持 stdio**。
+先启动桌面端（它会在 8765 拉起服务端），或手动 `cargo run -p aitmeow-cli -- start --port 8765`，
+然后配置客户端：
 
 ```json
 {
   "mcpServers": {
     "aitmeow": {
-      "command": "aitmeow-server",
-      "args": ["--mcp"]
+      "transport": "http",
+      "url": "http://127.0.0.1:8765/mcp"
     }
   }
 }
 ```
 
 Available tools:
-- `svg_preview` - Generate and preview SVG with template parameters
+- `svg_preview` - 把 SVG 推送到桌面端预览面板；返回 `desktop_connected` 表示桌面端是否在线
+- `session_state` - 读取桌面端当前模板、参数、规则和编译后的 prompt
+
+推送事件通过 WebSocket `/ws/preview` 下发，事件 `type` 为 snake_case
+（`generation_ready` / `state_updated`），前端订阅时需注意大小写。
 
 ## Development
 

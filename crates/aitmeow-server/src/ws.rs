@@ -5,6 +5,8 @@ use axum::{
     extract::State,
     response::IntoResponse,
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
@@ -14,11 +16,29 @@ pub async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, state, rx))
 }
 
+/// 连接计数守卫 —— 连接断开（含 panic 提前退出）时自动减一
+struct ConnectionGuard(Arc<AtomicUsize>);
+
+impl ConnectionGuard {
+    fn new(counter: Arc<AtomicUsize>) -> Self {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Self(counter)
+    }
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 async fn handle_socket(
     mut socket: WebSocket,
-    _state: AppState,
+    state: AppState,
     mut rx: tokio::sync::broadcast::Receiver<SessionEvent>,
 ) {
+    let _guard = ConnectionGuard::new(Arc::clone(&state.ws_connections));
+
     loop {
         tokio::select! {
             msg = socket.recv() => {

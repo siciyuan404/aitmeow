@@ -404,9 +404,12 @@ export default function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
               switch (s.status) {
                 case 'idle':
                   return (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">检查是否有新版本</span>
-                      <button type="button" onClick={handleCheckUpdate} className={btnSecondary}>检查更新</button>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">检查是否有新版本</span>
+                        <button type="button" onClick={handleCheckUpdate} className={btnSecondary}>检查更新</button>
+                      </div>
+                      <p className="text-xs text-slate-500">启动后会自动检查，有新版本在后台下载，不打扰当前操作。</p>
                     </div>
                   );
 
@@ -469,14 +472,17 @@ export default function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
 
                 case 'ready':
                   return (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">
-                        更新已就绪
-                        <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
-                          v{s.info?.version}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-700">
+                          新版本已就绪
+                          <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
+                            v{s.info?.version}
+                          </span>
                         </span>
-                      </span>
-                      <button type="button" onClick={handleInstallUpdate} className={btnPrimary}>重启并安装</button>
+                        <button type="button" onClick={handleInstallUpdate} className={btnPrimary}>重启并安装</button>
+                      </div>
+                      <p className="text-xs text-slate-500">不重启也没关系，关闭程序时会自动完成安装。</p>
                     </div>
                   );
 

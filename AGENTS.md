@@ -40,6 +40,33 @@ cargo test
 cargo run -p aitmeow-cli -- start --port 8765 --memory
 ```
 
+## 7. 发布与自动更新
+
+桌面端用 `electron-builder` + `electron-updater` 做自动更新，发布走 GitHub Releases。
+
+### 发版流程
+
+1. 改 `desktop/package.json` 的 `version`（唯一版本源，Rust crate 不参与桌面端版本）
+2. `git commit` → `git tag v<x.y.z>` → `git push origin <branch>` → `git push origin v<x.y.z>`
+3. CI 自动构建 NSIS 安装包 + `latest.yml` 并上传到 Release
+4. 客户端启动 5 秒后静默检查，有新版本后台下载，退出程序时自动安装（无感更新）；
+   顶栏只在「下载中 / 已就绪」时出现轻量提示，其余状态不打扰用户
+
+### 版本号铁律
+
+- tag 名必须是 `v<x.y.z>`，且 `<x.y.z>` 必须等于 `desktop/package.json` 的 `version`，否则 CI 校验报错
+- 已推送的 tag 不要 force 覆盖，发新版本用新号（如 v0.3.1）
+
+### 已知坑
+
+- **无感更新有自举问题**：更新逻辑随应用一起发布，v0.3.1 及更早是手动下载模式，
+  所以第一次必须手动装新安装包，从那之后的版本才能滚动无感更新
+- `release/AitMeow-win32-x64/` 是便携解压包（version 停在 0.1.0、`resources/app` 是源码目录副本、
+  没有 publish 配置），自动更新对它完全无效，它加载的也是 `resources/app/dist` 而不是 `desktop/dist`
+- CI 用 `npm ci`，改了 `desktop/package.json` 依赖后必须本地 `npm install` 同步 `package-lock.json` 再提交，否则 CI 挂在 install 步骤
+- 更新状态机在 `desktop/electron/ipc/handlers/update.ts` 的模块全局变量里，不在 Rust 侧；改更新逻辑只动 `desktop/electron/`，不要往 server/core 加更新代码
+- `electron-updater` 仅在 `app.isPackaged` 时工作，开发环境检查更新会返回"开发环境不支持"
+
 ---
 
 ## 附录：本文件的修改规则

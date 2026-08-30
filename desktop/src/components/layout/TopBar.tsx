@@ -8,6 +8,7 @@ type InstallGuide = 'mcp' | 'cli' | 'skill';
 interface TopBarProps {
   connected: boolean;
   port: number;
+  updateState?: UpdateState | null;
   onSettingsClick: () => void;
 }
 
@@ -21,9 +22,41 @@ function winMin() { window.electronAPI?.windowMinimize(); }
 function winMax() { window.electronAPI?.windowMaximize(); }
 function winClose() { window.electronAPI?.windowClose(); }
 
+/// 后台更新提示 —— 只在下载中和就绪时出现，其余状态完全不打扰用户
+function UpdateBadge({ state }: { state: UpdateState | null | undefined }) {
+  if (!state || !state.isPackaged) return null;
+
+  if (state.status === 'downloading') {
+    const pct = Math.round(state.progress?.percent ?? 0);
+    return (
+      <span className="flex h-7 items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-medium text-slate-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+        下载更新 {pct}%
+      </span>
+    );
+  }
+
+  if (state.status === 'ready') {
+    return (
+      <button
+        type="button"
+        onClick={() => { window.electronAPI?.updateInstall(); }}
+        className="flex h-7 items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-2.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100"
+        title="重启并应用到新版本（不重启也会在下次退出时自动安装）"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+        重启更新 v{state.info?.version}
+      </button>
+    );
+  }
+
+  return null;
+}
+
 export default function TopBar({
   connected,
   port,
+  updateState,
   onSettingsClick,
 }: TopBarProps) {
   const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
@@ -163,6 +196,8 @@ export default function TopBar({
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
+
+        <UpdateBadge state={updateState} />
 
         <button onClick={onSettingsClick} className="text-slate-500 hover:text-slate-700 transition-colors p-0.5">
           <svg className="w-[15px] h-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

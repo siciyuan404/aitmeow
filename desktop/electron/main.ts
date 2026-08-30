@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import { registerIpcHandlers } from './ipc/registry';
-import { initUpdater, setMainWindow } from './ipc/handlers/update';
+import { initUpdater, setMainWindow, checkForUpdatesInBackground } from './ipc/handlers/update';
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
@@ -126,6 +126,8 @@ app.whenReady().then(() => {
   initUpdater();
   startServer();
   createWindow();
+  // 启动 5 秒后静默检查更新，有新版本后台下载，退出时自动安装
+  checkForUpdatesInBackground(5000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
